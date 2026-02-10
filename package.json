@@ -1,8 +1,11 @@
 {
-  "name": "porterman",
+  "name": "@mucan54/porterman",
   "version": "1.0.0",
   "description": "Zero-config HTTPS tunnel for your local ports. No external server needed.",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "porterman": "./bin/porterman.mjs"
   },
@@ -41,7 +44,15 @@
     "reverse-proxy",
     "letsencrypt"
   ],
-  "author": "",
+  "author": "mucan54",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mucan54/porterman.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mucan54/porterman/issues"
+  },
+  "homepage": "https://github.com/mucan54/porterman#readme",
   "license": "MIT",
   "dependencies": {
     "acme-client": "^5.4.0",

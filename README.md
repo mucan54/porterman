@@ -23,7 +23,7 @@ The hostname pattern `{port}-{ip-dashed}.sslip.io` embeds both the port and IP, 
 ## Installation
 
 ```bash
-npm install -g porterman
+npm install -g @mucan54/porterman
 ```
 
 Requires Node.js 18+.
@@ -145,7 +145,7 @@ Internet Request
 ## Programmatic API
 
 ```typescript
-import { startServer } from "porterman";
+import { startServer } from "@mucan54/porterman";
 
 const server = await startServer({
   ports: [3000, 8080],
