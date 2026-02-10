@@ -1,7 +1,7 @@
 {
   "name": "@mucan54/porterman",
-  "version": "1.0.0",
-  "description": "Zero-config HTTPS tunnel for your local ports. No external server needed.",
+  "version": "1.2.0",
+  "description": "Zero-config HTTPS tunnels for your local ports. Powered by Cloudflare.",
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -36,13 +36,12 @@
     "tunnel",
     "ngrok",
     "https",
-    "ssl",
-    "proxy",
-    "sslip",
+    "cloudflare",
+    "cloudflared",
     "expose",
     "localhost",
     "reverse-proxy",
-    "letsencrypt"
+    "trycloudflare"
   ],
   "author": "mucan54",
   "repository": {
@@ -55,12 +54,10 @@
   "homepage": "https://github.com/mucan54/porterman#readme",
   "license": "MIT",
   "dependencies": {
-    "acme-client": "^5.4.0",
     "cac": "^6.7.14",
-    "http-proxy": "^1.18.1"
+    "cloudflared": "^0.7.1"
   },
   "devDependencies": {
-    "@types/http-proxy": "^1.17.14",
     "@types/node": "^20.11.0",
     "tsup": "^8.0.1",
     "typescript": "^5.3.3",
