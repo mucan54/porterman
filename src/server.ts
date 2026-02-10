@@ -4,13 +4,12 @@ import { createSecureContext, type SecureContext } from "node:tls";
 import { getDashedIp, detectPublicIp } from "./ip.js";
 import { getCertificate, handleAcmeChallenge, type CertResult } from "./certs.js";
 import { createProxyEngine, type ProxyRoute } from "./proxy.js";
-import { makeHostname, isPortAvailable, isValidPort } from "./utils.js";
+import { makeHostname, isPortAvailable, isValidPort, parsePortFromHost } from "./utils.js";
 import { writePidFile, paths } from "./config.js";
 import { logger, setVerbose } from "./logger.js";
-import { readFileSync } from "node:fs";
 
 export interface ServerOptions {
-  ports: number[];
+  ports?: number[];
   name?: string;
   noSsl?: boolean;
   verbose?: boolean;
@@ -26,11 +25,13 @@ export interface ServerOptions {
 export interface PortermanServer {
   close(): Promise<void>;
   urls: Map<number, string>;
+  dashedIp: string;
+  publicIp: string;
 }
 
 export async function startServer(options: ServerOptions): Promise<PortermanServer> {
   const {
-    ports,
+    ports = [],
     name,
     noSsl = false,
     verbose = false,
@@ -45,7 +46,7 @@ export async function startServer(options: ServerOptions): Promise<PortermanServ
 
   setVerbose(verbose);
 
-  // Validate ports
+  // Validate explicit ports if provided
   for (const port of ports) {
     if (!isValidPort(port)) {
       throw new Error(`Invalid port number: ${port}`);
@@ -56,13 +57,16 @@ export async function startServer(options: ServerOptions): Promise<PortermanServ
     throw new Error("--name can only be used with a single port");
   }
 
+  // Dynamic mode: no explicit ports means proxy ANY port from hostname
+  const isDynamic = ports.length === 0;
+
   // Detect public IP
   logger.info("Detecting public IP...");
   const publicIp = host ?? (await detectPublicIp());
   const dashedIp = await getDashedIp(host);
   logger.info(`Public IP: ${publicIp}`);
 
-  // Generate hostnames
+  // Generate hostnames for explicit ports
   const routes: ProxyRoute[] = ports.map((port) => {
     const prefix = name && ports.length === 1 ? name : String(port);
     return {
@@ -99,8 +103,13 @@ export async function startServer(options: ServerOptions): Promise<PortermanServ
     );
   }
 
-  // Create proxy engine
-  const proxyEngine = createProxyEngine({ timeout, routes, nameMap });
+  // Create proxy engine — dynamic mode if no explicit ports
+  const proxyEngine = createProxyEngine({
+    timeout,
+    routes,
+    nameMap,
+    dynamic: isDynamic,
+  });
 
   // Parse basic auth credentials if provided
   let authCredentials: { user: string; pass: string } | null = null;
@@ -201,50 +210,87 @@ export async function startServer(options: ServerOptions): Promise<PortermanServ
   let httpsServer: ReturnType<typeof createHttpsServer> | null = null;
   const certCache = new Map<string, CertResult>();
 
-  if (!noSsl) {
-    // Obtain certificates for all hostnames
-    logger.info("Obtaining SSL certificates...");
+  // Track in-flight cert requests to avoid duplicate concurrent requests
+  const certPending = new Map<string, Promise<CertResult>>();
 
-    for (const route of routes) {
-      const cert = await getCertificate(route.hostname, { staging });
-      certCache.set(route.hostname, cert);
-      if (cert.selfSigned) {
-        logger.warn(
-          `Using self-signed certificate for ${route.hostname} (browsers will show a warning)`
-        );
+  /**
+   * Get or provision a certificate for a hostname.
+   * Caches results and deduplicates concurrent requests for the same hostname.
+   */
+  async function getOrProvisionCert(hostname: string): Promise<CertResult> {
+    // Check in-memory cache
+    if (certCache.has(hostname)) {
+      return certCache.get(hostname)!;
+    }
+
+    // Check if there's already a pending request
+    if (certPending.has(hostname)) {
+      return certPending.get(hostname)!;
+    }
+
+    // Start provisioning
+    const promise = getCertificate(hostname, { staging }).then((cert) => {
+      certCache.set(hostname, cert);
+      certPending.delete(hostname);
+      return cert;
+    }).catch((err) => {
+      certPending.delete(hostname);
+      throw err;
+    });
+
+    certPending.set(hostname, promise);
+    return promise;
+  }
+
+  if (!noSsl) {
+    // Pre-obtain certificates for explicitly listed hostnames
+    if (routes.length > 0) {
+      logger.info("Obtaining SSL certificates...");
+      for (const route of routes) {
+        const cert = await getOrProvisionCert(route.hostname);
+        if (cert.selfSigned) {
+          logger.warn(
+            `Using self-signed certificate for ${route.hostname} (browsers will show a warning)`
+          );
+        }
       }
     }
 
-    // SNI callback for multi-cert support
+    // Generate a wildcard self-signed cert as default fallback for SNI
+    // This ensures the HTTPS server can start even with no pre-registered routes
+    let defaultCert: CertResult;
+    if (certCache.size > 0) {
+      defaultCert = certCache.values().next().value!;
+    } else {
+      // Dynamic mode with no pre-registered ports — create a default cert
+      const defaultHostname = `porterman-${dashedIp}.sslip.io`;
+      defaultCert = await getCertificate(defaultHostname, { staging });
+      certCache.set(defaultHostname, defaultCert);
+    }
+
+    // SNI callback: dynamically serve correct cert per hostname, provision on-demand
     const sniCallback = (
       servername: string,
       callback: (err: Error | null, ctx?: SecureContext) => void
     ): void => {
-      const cert = certCache.get(servername);
-      if (cert) {
-        const ctx = createSecureContext({
-          key: cert.key,
-          cert: cert.cert,
-        });
-        callback(null, ctx);
-      } else {
-        // Try to find a matching cert
-        for (const [hostname, c] of certCache) {
-          if (servername.endsWith(hostname.slice(hostname.indexOf(".")))) {
-            const ctx = createSecureContext({
-              key: c.key,
-              cert: c.cert,
-            });
-            callback(null, ctx);
-            return;
-          }
-        }
-        callback(new Error(`No certificate for ${servername}`));
+      // Check cache first (fast path)
+      const cached = certCache.get(servername);
+      if (cached) {
+        callback(null, createSecureContext({ key: cached.key, cert: cached.cert }));
+        return;
       }
-    };
 
-    // Use the first cert as default
-    const defaultCert = certCache.values().next().value!;
+      // On-demand cert provisioning for dynamic mode
+      getOrProvisionCert(servername)
+        .then((cert) => {
+          callback(null, createSecureContext({ key: cert.key, cert: cert.cert }));
+        })
+        .catch((err) => {
+          logger.verbose(`SNI cert provision failed for ${servername}: ${err.message}`);
+          // Fall back to default cert so the connection doesn't just hang
+          callback(null, createSecureContext({ key: defaultCert.key, cert: defaultCert.cert }));
+        });
+    };
 
     httpsServer = createHttpsServer(
       {
@@ -264,27 +310,27 @@ export async function startServer(options: ServerOptions): Promise<PortermanServ
       proxyEngine.handleUpgrade(req, socket, head);
     });
 
-    // Start HTTPS server
+    // Start HTTPS server — bind to 0.0.0.0 explicitly
     await new Promise<void>((resolve, reject) => {
-      httpsServer!.listen(httpsPort, () => resolve());
+      httpsServer!.listen(httpsPort, "0.0.0.0", () => resolve());
       httpsServer!.once("error", reject);
     });
 
-    logger.verbose(`HTTPS server listening on port ${httpsPort}`);
+    logger.verbose(`HTTPS server listening on 0.0.0.0:${httpsPort}`);
   }
 
-  // Start HTTP server
+  // Start HTTP server — bind to 0.0.0.0 explicitly
   await new Promise<void>((resolve, reject) => {
-    httpServer.listen(httpPort, () => resolve());
+    httpServer.listen(httpPort, "0.0.0.0", () => resolve());
     httpServer.once("error", reject);
   });
 
-  logger.verbose(`HTTP server listening on port ${httpPort}`);
+  logger.verbose(`HTTP server listening on 0.0.0.0:${httpPort}`);
 
   // Write PID file
   await writePidFile(process.pid);
 
-  // Build URL map
+  // Build URL map for explicit ports
   const urls = new Map<number, string>();
   for (const route of routes) {
     const protocol = noSsl ? "http" : "https";
@@ -301,10 +347,30 @@ export async function startServer(options: ServerOptions): Promise<PortermanServ
   logger.blank();
   logger.success("Ready!");
   logger.blank();
-  for (const route of routes) {
-    const url = urls.get(route.targetPort)!;
-    logger.link(`http://localhost:${route.targetPort}`, url);
+
+  if (isDynamic) {
+    const protocol = noSsl ? "http" : "https";
+    const portSuffix =
+      (!noSsl && httpsPort !== 443)
+        ? `:${httpsPort}`
+        : (noSsl && httpPort !== 80)
+          ? `:${httpPort}`
+          : "";
+    console.log(`  Any port is now accessible via:`);
+    console.log(`  ${protocol}://{port}-${dashedIp}.sslip.io${portSuffix}`);
+    logger.blank();
+    console.log(`  Examples:`);
+    for (const examplePort of [3000, 5173, 8080]) {
+      const exUrl = `${protocol}://${examplePort}-${dashedIp}.sslip.io${portSuffix}`;
+      logger.link(`http://localhost:${examplePort}`, exUrl);
+    }
+  } else {
+    for (const route of routes) {
+      const url = urls.get(route.targetPort)!;
+      logger.link(`http://localhost:${route.targetPort}`, url);
+    }
   }
+
   logger.blank();
   console.log("  Press Ctrl+C to stop");
   logger.blank();
@@ -337,5 +403,5 @@ export async function startServer(options: ServerOptions): Promise<PortermanServ
     logger.success("Stopped");
   }
 
-  return { close, urls };
+  return { close, urls, dashedIp, publicIp };
 }

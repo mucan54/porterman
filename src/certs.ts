@@ -112,7 +112,7 @@ async function obtainCert(
   // Order the certificate
   const cert = await client.auto({
     csr,
-    email: "porterman@localhost",
+    email: "porterman@sslip.io",
     termsOfServiceAgreed: true,
     challengeCreateFn: async (_authz, _challenge, keyAuthorization) => {
       const token = _challenge.token;

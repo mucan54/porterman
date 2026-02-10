@@ -9,10 +9,11 @@ export interface ProxyRoute {
   name?: string;
 }
 
-interface ProxyOptions {
+export interface ProxyOptions {
   timeout: number;
-  routes: ProxyRoute[];
+  routes?: ProxyRoute[];
   nameMap?: Map<string, number>; // name → target port
+  dynamic?: boolean; // allow any port parsed from hostname
 }
 
 const ERROR_502_HTML = (port: number) => `<!DOCTYPE html>
@@ -34,7 +35,7 @@ const ERROR_502_HTML = (port: number) => `<!DOCTYPE html>
 </html>`;
 
 export function createProxyEngine(options: ProxyOptions) {
-  const { timeout, routes, nameMap } = options;
+  const { timeout, routes = [], nameMap, dynamic = false } = options;
 
   // Build port lookup: hostname → target port
   const routeMap = new Map<string, number>();
@@ -67,18 +68,9 @@ export function createProxyEngine(options: ProxyOptions) {
     // Normalize: remove port suffix
     const hostname = host.split(":")[0];
 
-    // Direct hostname match
+    // Direct hostname match (pre-registered routes)
     if (routeMap.has(hostname)) {
       return routeMap.get(hostname)!;
-    }
-
-    // Try parsing port from hostname
-    const port = parsePortFromHost(host);
-    if (port !== null) {
-      // Verify this port is in our routes
-      for (const route of routes) {
-        if (route.targetPort === port) return port;
-      }
     }
 
     // Check name map
@@ -86,6 +78,17 @@ export function createProxyEngine(options: ProxyOptions) {
       const prefix = hostname.split("-")[0];
       if (nameMap.has(prefix)) {
         return nameMap.get(prefix)!;
+      }
+    }
+
+    // Try parsing port from hostname dynamically
+    const port = parsePortFromHost(host);
+    if (port !== null) {
+      // In dynamic mode, accept any valid port
+      if (dynamic) return port;
+      // In static mode, only accept ports that are in our routes
+      for (const route of routes) {
+        if (route.targetPort === port) return port;
       }
     }
 
@@ -140,5 +143,5 @@ export function createProxyEngine(options: ProxyOptions) {
     proxy.close();
   }
 
-  return { handleRequest, handleUpgrade, close };
+  return { handleRequest, handleUpgrade, close, resolveTargetPort };
 }

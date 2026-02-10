@@ -41,16 +41,8 @@ cli
     logger.banner(version);
     logger.blank();
 
-    if (!portsRaw || portsRaw.length === 0) {
-      logger.error("Please specify at least one port to expose.");
-      logger.blank();
-      console.log("  Usage: porterman expose <port> [port2] [port3]");
-      console.log("  Example: porterman expose 3000 8080");
-      logger.blank();
-      process.exit(1);
-    }
-
-    const ports = portsRaw.map((p) => {
+    // No ports = dynamic mode (proxy any port from hostname)
+    const ports = (portsRaw ?? []).map((p) => {
       const num = parseInt(p, 10);
       if (isNaN(num) || num < 1 || num > 65535) {
         logger.error(`Invalid port: ${p}`);
@@ -58,6 +50,10 @@ cli
       }
       return num;
     });
+
+    if (ports.length === 0) {
+      logger.info("Dynamic mode: all ports will be proxied automatically");
+    }
 
     const ipAllow = options.ipAllow
       ? (options.ipAllow as string).split(",").map((ip: string) => ip.trim())

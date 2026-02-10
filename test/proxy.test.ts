@@ -130,4 +130,42 @@ describe("createProxyEngine", () => {
     proxyServer.close();
     engine.close();
   });
+
+  it("dynamic mode proxies any port from hostname", async () => {
+    // Ensure target is running
+    if (!targetServer?.listening) await startTarget();
+
+    const engine = createProxyEngine({ timeout: 5, dynamic: true });
+
+    const proxyServer = createServer((req, res) => {
+      engine.handleRequest(req, res);
+    });
+
+    await new Promise<void>((resolve) => proxyServer.listen(0, resolve));
+    const addr = proxyServer.address();
+    if (!addr || typeof addr === "string") throw new Error("no address");
+
+    // Dynamic mode should route based on port parsed from hostname
+    const response = await makeRequest(
+      addr.port,
+      "/dynamic-test",
+      `${TARGET_PORT}-1-2-3-4.sslip.io`
+    );
+
+    expect(response.status).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.url).toBe("/dynamic-test");
+
+    proxyServer.close();
+    engine.close();
+  });
+
+  it("dynamic mode resolves port from any hostname", () => {
+    const engine = createProxyEngine({ timeout: 5, dynamic: true });
+    expect(engine.resolveTargetPort("8080-10-20-30-40.sslip.io")).toBe(8080);
+    expect(engine.resolveTargetPort("3000-10-20-30-40.sslip.io")).toBe(3000);
+    expect(engine.resolveTargetPort("5173-10-20-30-40.sslip.io")).toBe(5173);
+    expect(engine.resolveTargetPort("unknown.example.com")).toBeNull();
+    engine.close();
+  });
 });
