@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { startServer } from "./server.js";
-import { cleanCerts, getCertificate } from "./certs.js";
 import { readPidFile, pidFileExists } from "./config.js";
 import { logger } from "./logger.js";
 
@@ -26,22 +25,12 @@ const cli = cac("porterman");
 
 // expose command
 cli
-  .command("expose [...ports]", "Expose one or more local ports over HTTPS")
-  .option("-n, --name <name>", "Custom subdomain prefix (single port only)")
-  .option("--no-ssl", "HTTP only mode (skip SSL)")
-  .option("-v, --verbose", "Log all requests")
-  .option("--timeout <seconds>", "Proxy timeout in seconds", { default: 30 })
-  .option("--host <ip>", "Override auto-detected public IP")
-  .option("--staging", "Use Let's Encrypt staging environment")
-  .option("--http-port <port>", "Custom HTTP port", { default: 80 })
-  .option("--https-port <port>", "Custom HTTPS port", { default: 443 })
-  .option("--auth <user:pass>", "Enable basic auth on exposed ports")
-  .option("--ip-allow <ips>", "Comma-separated list of allowed IPs")
+  .command("expose [...ports]", "Expose one or more local ports via Cloudflare Tunnel")
+  .option("-v, --verbose", "Log all tunnel activity")
   .action(async (portsRaw: string[], options) => {
     logger.banner(version);
     logger.blank();
 
-    // No ports = dynamic mode (proxy any port from hostname)
     const ports = (portsRaw ?? []).map((p) => {
       const num = parseInt(p, 10);
       if (isNaN(num) || num < 1 || num > 65535) {
@@ -52,33 +41,35 @@ cli
     });
 
     if (ports.length === 0) {
-      logger.info("Dynamic mode: all ports will be proxied automatically");
+      logger.error("At least one port is required");
+      logger.info("Usage: porterman expose <port> [port2] [port3] ...");
+      process.exit(1);
     }
-
-    const ipAllow = options.ipAllow
-      ? (options.ipAllow as string).split(",").map((ip: string) => ip.trim())
-      : undefined;
 
     let server: Awaited<ReturnType<typeof startServer>> | null = null;
 
     try {
       server = await startServer({
         ports,
-        name: options.name,
-        noSsl: options.ssl === false,
         verbose: options.verbose,
-        timeout: Number(options.timeout),
-        host: options.host,
-        staging: options.staging,
-        httpPort: Number(options.httpPort),
-        httpsPort: Number(options.httpsPort),
-        auth: options.auth,
-        ipAllow,
       });
     } catch (err) {
       logger.error(err instanceof Error ? err.message : String(err));
       process.exit(1);
     }
+
+    // Print ready message
+    logger.blank();
+    logger.success("Ready!");
+    logger.blank();
+
+    for (const [port, url] of server.urls) {
+      logger.link(`http://localhost:${port}`, url);
+    }
+
+    logger.blank();
+    console.log("  Press Ctrl+C to stop");
+    logger.blank();
 
     // Handle graceful shutdown
     const shutdown = async () => {
@@ -134,26 +125,6 @@ cli.command("stop", "Stop running Porterman instance").action(async () => {
     logger.info("No Porterman instance is running (stale PID file).");
   }
 });
-
-// certs command
-cli
-  .command("certs", "Manage SSL certificates")
-  .option("--renew", "Force certificate renewal")
-  .option("--clean", "Remove all cached certificates")
-  .action(async (options) => {
-    if (options.clean) {
-      await cleanCerts();
-      return;
-    }
-
-    if (options.renew) {
-      logger.info("Certificate renewal is done automatically when using 'expose'.");
-      logger.info("Use 'porterman expose <port> --staging' to test with Let's Encrypt staging.");
-      return;
-    }
-
-    logger.info("Use --renew to force renewal or --clean to remove all cached certs.");
-  });
 
 // Default command (show help)
 cli.command("", "Show help").action(() => {
