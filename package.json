@@ -1,0 +1,58 @@
+{
+  "name": "porterman",
+  "version": "1.0.0",
+  "description": "Zero-config HTTPS tunnel for your local ports. No external server needed.",
+  "type": "module",
+  "bin": {
+    "porterman": "./bin/porterman.mjs"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "tunnel",
+    "ngrok",
+    "https",
+    "ssl",
+    "proxy",
+    "sslip",
+    "expose",
+    "localhost",
+    "reverse-proxy",
+    "letsencrypt"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "acme-client": "^5.4.0",
+    "cac": "^6.7.14",
+    "http-proxy": "^1.18.1"
+  },
+  "devDependencies": {
+    "@types/http-proxy": "^1.17.14",
+    "@types/node": "^20.11.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  }
+}
