@@ -170,12 +170,13 @@ export async function startServer(options: ServerOptions): Promise<PortermanServ
     return true;
   }
 
-  // HTTP request handler
+  // HTTP request handler — serves ACME challenges, redirects, or proxies
   function httpRequestHandler(req: IncomingMessage, res: ServerResponse): void {
-    // Handle ACME challenges
+    // ACME challenges ALWAYS take priority (needed for cert provisioning)
     if (req.url) {
       const challengeResponse = handleAcmeChallenge(req.url);
       if (challengeResponse) {
+        logger.verbose(`ACME challenge response for ${req.url}`);
         res.writeHead(200, { "Content-Type": "text/plain" });
         res.end(challengeResponse);
         return;
@@ -197,38 +198,38 @@ export async function startServer(options: ServerOptions): Promise<PortermanServ
     res.end();
   }
 
-  // Start HTTP server
+  // ─── START HTTP SERVER FIRST ───
+  // This MUST happen before certificate provisioning, because Let's Encrypt
+  // HTTP-01 challenges require port 80 to be reachable during validation.
   const httpServer = createHttpServer(httpRequestHandler);
 
-  // Handle WebSocket upgrades on HTTP server (no-ssl mode)
   if (noSsl) {
     httpServer.on("upgrade", (req, socket, head) => {
       proxyEngine.handleUpgrade(req, socket, head);
     });
   }
 
+  await new Promise<void>((resolve, reject) => {
+    httpServer.listen(httpPort, "0.0.0.0", () => resolve());
+    httpServer.once("error", reject);
+  });
+
+  logger.verbose(`HTTP server listening on 0.0.0.0:${httpPort}`);
+
+  // ─── NOW PROVISION CERTIFICATES (HTTP server is up for ACME challenges) ───
   let httpsServer: ReturnType<typeof createHttpsServer> | null = null;
   const certCache = new Map<string, CertResult>();
-
-  // Track in-flight cert requests to avoid duplicate concurrent requests
   const certPending = new Map<string, Promise<CertResult>>();
 
-  /**
-   * Get or provision a certificate for a hostname.
-   * Caches results and deduplicates concurrent requests for the same hostname.
-   */
   async function getOrProvisionCert(hostname: string): Promise<CertResult> {
-    // Check in-memory cache
     if (certCache.has(hostname)) {
       return certCache.get(hostname)!;
     }
 
-    // Check if there's already a pending request
     if (certPending.has(hostname)) {
       return certPending.get(hostname)!;
     }
 
-    // Start provisioning
     const promise = getCertificate(hostname, { staging }).then((cert) => {
       certCache.set(hostname, cert);
       certPending.delete(hostname);
@@ -256,14 +257,13 @@ export async function startServer(options: ServerOptions): Promise<PortermanServ
       }
     }
 
-    // Generate a wildcard self-signed cert as default fallback for SNI
-    // This ensures the HTTPS server can start even with no pre-registered routes
+    // Default cert: use first cached or generate one for dynamic mode
     let defaultCert: CertResult;
     if (certCache.size > 0) {
       defaultCert = certCache.values().next().value!;
     } else {
-      // Dynamic mode with no pre-registered ports — create a default cert
       const defaultHostname = `porterman-${dashedIp}.sslip.io`;
+      logger.info("Obtaining default SSL certificate...");
       defaultCert = await getCertificate(defaultHostname, { staging });
       certCache.set(defaultHostname, defaultCert);
     }
@@ -273,21 +273,18 @@ export async function startServer(options: ServerOptions): Promise<PortermanServ
       servername: string,
       callback: (err: Error | null, ctx?: SecureContext) => void
     ): void => {
-      // Check cache first (fast path)
       const cached = certCache.get(servername);
       if (cached) {
         callback(null, createSecureContext({ key: cached.key, cert: cached.cert }));
         return;
       }
 
-      // On-demand cert provisioning for dynamic mode
       getOrProvisionCert(servername)
         .then((cert) => {
           callback(null, createSecureContext({ key: cert.key, cert: cert.cert }));
         })
         .catch((err) => {
           logger.verbose(`SNI cert provision failed for ${servername}: ${err.message}`);
-          // Fall back to default cert so the connection doesn't just hang
           callback(null, createSecureContext({ key: defaultCert.key, cert: defaultCert.cert }));
         });
     };
@@ -305,12 +302,10 @@ export async function startServer(options: ServerOptions): Promise<PortermanServ
       }
     );
 
-    // Handle WebSocket upgrades on HTTPS
     httpsServer.on("upgrade", (req, socket, head) => {
       proxyEngine.handleUpgrade(req, socket, head);
     });
 
-    // Start HTTPS server — bind to 0.0.0.0 explicitly
     await new Promise<void>((resolve, reject) => {
       httpsServer!.listen(httpsPort, "0.0.0.0", () => resolve());
       httpsServer!.once("error", reject);
@@ -318,14 +313,6 @@ export async function startServer(options: ServerOptions): Promise<PortermanServ
 
     logger.verbose(`HTTPS server listening on 0.0.0.0:${httpsPort}`);
   }
-
-  // Start HTTP server — bind to 0.0.0.0 explicitly
-  await new Promise<void>((resolve, reject) => {
-    httpServer.listen(httpPort, "0.0.0.0", () => resolve());
-    httpServer.once("error", reject);
-  });
-
-  logger.verbose(`HTTP server listening on 0.0.0.0:${httpPort}`);
 
   // Write PID file
   await writePidFile(process.pid);
@@ -394,7 +381,6 @@ export async function startServer(options: ServerOptions): Promise<PortermanServ
 
     await Promise.all(closePromises);
 
-    // Clean up PID file
     try {
       const { unlink } = await import("node:fs/promises");
       await unlink(paths.pidFile);
