@@ -1,6 +1,6 @@
 {
   "name": "@mucan54/porterman",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Zero-config HTTPS tunnel for your local ports. No external server needed.",
   "type": "module",
   "publishConfig": {
