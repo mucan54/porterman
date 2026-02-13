@@ -2,7 +2,8 @@ import cac from "cac";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { startServer } from "./server.js";
+import { startServer, type PortMapping } from "./server.js";
+import { parsePortArg, formatExports } from "./env.js";
 import { readPidFile, pidFileExists } from "./config.js";
 import { logger } from "./logger.js";
 
@@ -25,51 +26,78 @@ const cli = cac("porterman");
 
 // expose command
 cli
-  .command("expose [...ports]", "Expose one or more local ports via Cloudflare Tunnel")
+  .command("expose [...ports]", "Expose local ports via Cloudflare Tunnel")
   .option("-v, --verbose", "Log all tunnel activity")
+  .option("--env-file <path>", "Path to write env file (default: .env.porterman)")
+  .option("--eval", "Output export statements for shell eval")
   .action(async (portsRaw: string[], options) => {
-    logger.banner(version);
-    logger.blank();
+    const isEvalMode = options.eval === true;
 
-    const ports = (portsRaw ?? []).map((p) => {
-      const num = parseInt(p, 10);
-      if (isNaN(num) || num < 1 || num > 65535) {
-        logger.error(`Invalid port: ${p}`);
+    if (!isEvalMode) {
+      logger.banner(version);
+      logger.blank();
+    }
+
+    if (!portsRaw || portsRaw.length === 0) {
+      logger.error("At least one port is required");
+      logger.info("Usage: porterman expose <port[:ENV_VAR]> [port2[:ENV_VAR2]] ...");
+      process.exit(1);
+    }
+
+    // Parse port arguments (supports "3000" and "3000:FRONTEND_URL")
+    const portMappings: PortMapping[] = [];
+    for (const arg of portsRaw) {
+      try {
+        const parsed = parsePortArg(arg);
+        portMappings.push({ port: parsed.port, envVar: parsed.envVar });
+      } catch (err) {
+        logger.error(err instanceof Error ? err.message : String(err));
         process.exit(1);
       }
-      return num;
-    });
-
-    if (ports.length === 0) {
-      logger.error("At least one port is required");
-      logger.info("Usage: porterman expose <port> [port2] [port3] ...");
-      process.exit(1);
     }
 
     let server: Awaited<ReturnType<typeof startServer>> | null = null;
 
     try {
       server = await startServer({
-        ports,
+        ports: portMappings,
         verbose: options.verbose,
+        envFile: options.envFile,
       });
     } catch (err) {
       logger.error(err instanceof Error ? err.message : String(err));
       process.exit(1);
     }
 
-    // Print ready message
-    logger.blank();
-    logger.success("Ready!");
-    logger.blank();
-
-    for (const [port, url] of server.urls) {
-      logger.link(`http://localhost:${port}`, url);
+    // Eval mode: output exports and exit
+    if (isEvalMode && server.envVars.size > 0) {
+      console.log(formatExports(server.envVars));
     }
 
-    logger.blank();
-    console.log("  Press Ctrl+C to stop");
-    logger.blank();
+    if (!isEvalMode) {
+      // Print ready message
+      logger.blank();
+      logger.success("Ready!");
+      logger.blank();
+
+      for (const [port, url] of server.urls) {
+        const mapping = portMappings.find((m) => m.port === port);
+        if (mapping?.envVar) {
+          logger.link(`http://localhost:${port}`, `${url}  (${mapping.envVar})`);
+        } else {
+          logger.link(`http://localhost:${port}`, url);
+        }
+      }
+
+      if (server.envVars.size > 0) {
+        logger.blank();
+        logger.info("Env variables written to .env.porterman");
+      }
+
+      logger.blank();
+      console.log("  Press Ctrl+C to stop");
+      logger.blank();
+    }
 
     // Handle graceful shutdown
     const shutdown = async () => {
