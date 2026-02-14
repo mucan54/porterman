@@ -1,6 +1,6 @@
 {
   "name": "@mucan54/porterman",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Zero-config HTTPS tunnels for your local ports. Powered by Cloudflare.",
   "type": "module",
   "publishConfig": {
