@@ -40,6 +40,8 @@ cli
   .option("-v, --verbose", "Log all tunnel activity")
   .option("--env-file <path>", "Path to write env file (default: .env.porterman)")
   .option("--eval", "Output export statements for shell eval")
+  .option("--cleanup", "Delete backup file on shutdown (default: true)")
+  .option("--no-cleanup", "Keep backup file on shutdown")
   .action(async (portsRaw: string[], options) => {
     const isEvalMode = options.eval === true;
 
@@ -59,10 +61,6 @@ cli
       portsRaw.length === 1 &&
       existsSync(resolve(settingsFile))
     ) {
-      if (options.verbose) setVerbose(true);
-
-      logger.info(`Loading ${settingsFile}...`);
-
       // Load and validate config
       let config;
       try {
@@ -71,6 +69,13 @@ cli
         logger.error(err instanceof Error ? err.message : String(err));
         process.exit(1);
       }
+
+      // Merge config options with CLI flags (CLI wins)
+      const verbose = options.verbose ?? config.verbose ?? false;
+      const cleanup = options.cleanup ?? config.cleanup ?? true;
+      setVerbose(verbose);
+
+      logger.info(`Loading ${settingsFile}...`);
 
       // Crash recovery: if backup exists from a previous run, restore first
       const existingBackup = readBackupFile(settingsName);
@@ -106,7 +111,7 @@ cli
       // Start tunnels
       let tunnels;
       try {
-        tunnels = await startTunnels(ports, { verbose: options.verbose });
+        tunnels = await startTunnels(ports, { verbose });
       } catch (err) {
         // Cleanup backup on tunnel failure
         try {
@@ -145,19 +150,39 @@ cli
         );
       }
 
-      // Log modified variables
+      // Log modified variables grouped by file
       logger.blank();
       logger.success("Environment variables updated:");
+      const loggedFiles = new Map<string, Array<{ key: string; value: string }>>();
       for (const [portStr, tunnel] of Object.entries(config.tunnels)) {
         const port = parseInt(portStr, 10);
         const url = tunnelUrls.get(port);
         if (!url) continue;
-        for (const [key, rawValue] of Object.entries(tunnel.variables)) {
-          const value =
-            rawValue === "$tunnelUrl" ? url : String(rawValue);
-          logger.info(
-            `  ${tunnel.envFile} → ${key} = ${value}`
-          );
+        const hostname = new URL(url).hostname;
+        for (const target of tunnel.envFiles) {
+          const displayPath = target.filePath
+            ? `${target.filePath}/${target.file}`
+            : target.file;
+          if (!loggedFiles.has(displayPath)) {
+            loggedFiles.set(displayPath, []);
+          }
+          for (const [key, rawValue] of Object.entries(target.variables)) {
+            let value: string;
+            if (rawValue === "$tunnelUrl") {
+              value = url;
+            } else if (rawValue === "$tunnelHostname") {
+              value = hostname;
+            } else {
+              value = String(rawValue);
+            }
+            loggedFiles.get(displayPath)!.push({ key, value });
+          }
+        }
+      }
+      for (const [filePath, vars] of loggedFiles) {
+        logger.info(`  ${filePath}`);
+        for (const { key, value } of vars) {
+          console.log(`    ${key} = ${value}`);
         }
       }
 
@@ -195,6 +220,11 @@ cli
           const { unlink: unlinkFile } = await import("node:fs/promises");
           await unlinkFile(paths.pidFile);
         } catch {}
+
+        // If cleanup is disabled, re-create backup so it persists
+        if (!cleanup) {
+          writeBackupFile(settingsName, manifest);
+        }
 
         logger.success("Stopped");
         process.exit(0);

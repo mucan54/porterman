@@ -93,19 +93,39 @@ Create a `<name>.porterman.json` file in your project root to define tunnels and
 {
   "tunnels": {
     "3000": {
-      "envFile": ".env",
-      "variables": {
-        "PUBLIC_API_URL": "$tunnelUrl",
-        "PUBLIC_REVERB_PORT": 443
-      }
+      "envFiles": [
+        {
+          "file": ".env",
+          "variables": {
+            "PUBLIC_API_URL": "$tunnelUrl",
+            "PUBLIC_REVERB_HOST": "$tunnelHostname",
+            "PUBLIC_REVERB_PORT": 443
+          }
+        },
+        {
+          "file": "config.json",
+          "filePath": "./config",
+          "variables": {
+            "api.url": "$tunnelUrl",
+            "reverb.host": "$tunnelHostname",
+            "reverb.port": 443
+          }
+        }
+      ]
     },
     "5177": {
-      "envFile": ".env",
-      "variables": {
-        "PUBLIC_FRONTEND_URL": "$tunnelUrl"
-      }
+      "envFiles": [
+        {
+          "file": ".env",
+          "variables": {
+            "PUBLIC_FRONTEND_URL": "$tunnelUrl"
+          }
+        }
+      ]
     }
-  }
+  },
+  "cleanup": true,
+  "verbose": false
 }
 ```
 
@@ -117,12 +137,24 @@ porterman expose dev         # reads dev.porterman.json
 porterman expose production  # reads production.porterman.json
 ```
 
-This will:
-1. Start a Cloudflare tunnel for each port
-2. Replace `$tunnelUrl` with the actual tunnel URL in your env files
-3. Write static values (like `443`) as-is
-4. Back up original values to `.<name>.porterman.backup.env`
-5. Restore everything on shutdown (Ctrl+C)
+**Placeholders:**
+- `$tunnelUrl` — full tunnel URL (e.g., `https://abc-random.trycloudflare.com`)
+- `$tunnelHostname` — hostname only (e.g., `abc-random.trycloudflare.com`)
+- Any other value — written as-is (static value)
+
+**File types:** `.json` files use dot notation for nested paths (e.g., `"api.url"` sets `{ "api": { "url": "..." } }`). All other files are treated as env files (`KEY=VALUE`). You can override with an explicit `"type": "env"` or `"type": "json"` field.
+
+**`filePath`:** Optional base directory for resolving the file path. Supports relative (from cwd) and absolute paths.
+
+**Options:**
+- `cleanup` (default: `true`) — delete backup file on shutdown. Override with `--cleanup` / `--no-cleanup`
+- `verbose` (default: `false`) — enable verbose logging. Override with `-v` / `--verbose`
+
+**How it works:**
+1. Starts a Cloudflare tunnel for each port
+2. Backs up original values to `.<name>.porterman.backup.env`
+3. Writes new values into your env/JSON files
+4. Restores everything on shutdown (Ctrl+C)
 
 If porterman crashes, the backup file survives. On next startup, porterman detects it and restores your original values before proceeding.
 
