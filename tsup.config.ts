@@ -8,4 +8,18 @@ export default defineConfig({
   clean: true,
   splitting: true,
   sourcemap: true,
+  external: [
+    "node:fs",
+    "node:fs/promises",
+    "node:path",
+    "node:os",
+    "node:net",
+    "node:url",
+    "fs",
+    "fs/promises",
+    "path",
+    "os",
+    "net",
+    "url",
+  ],
 });
