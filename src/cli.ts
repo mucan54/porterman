@@ -51,14 +51,15 @@ cli
     }
 
     // ── Settings mode detection ──────────────────────────────────
-    // If the first argument is not a valid port number, treat it as a settings name.
-    // This ensures "porterman expose settings" always enters settings mode,
-    // and gives a clear "file not found" error if the config doesn't exist.
+    // If the first argument doesn't look like a port spec (digits or digits:NAME),
+    // treat it as a settings name. This supports both "porterman expose settings"
+    // and "porterman expose 3000:PUBLIC_URL" without ambiguity.
     const settingsName = portsRaw?.[0];
+    const looksLikePort = settingsName && /^\d+(:.+)?$/.test(settingsName);
     const isSettingsMode =
       settingsName &&
       portsRaw.length === 1 &&
-      isNaN(parseInt(settingsName, 10));
+      !looksLikePort;
 
     if (isSettingsMode) {
       const settingsFile = `${settingsName}.porterman.json`;
