@@ -51,16 +51,18 @@ cli
     }
 
     // ── Settings mode detection ──────────────────────────────────
+    // If the first argument doesn't look like a port spec (digits or digits:NAME),
+    // treat it as a settings name. This supports both "porterman expose settings"
+    // and "porterman expose 3000:PUBLIC_URL" without ambiguity.
     const settingsName = portsRaw?.[0];
-    const settingsFile = settingsName
-      ? `${settingsName}.porterman.json`
-      : null;
-
-    if (
-      settingsFile &&
+    const looksLikePort = settingsName && /^\d+(:.+)?$/.test(settingsName);
+    const isSettingsMode =
+      settingsName &&
       portsRaw.length === 1 &&
-      existsSync(resolve(settingsFile))
-    ) {
+      !looksLikePort;
+
+    if (isSettingsMode) {
+      const settingsFile = `${settingsName}.porterman.json`;
       // Load and validate config
       let config;
       try {

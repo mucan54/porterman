@@ -1,5 +1,5 @@
 import { readFile, writeFile, unlink } from "node:fs/promises";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { isValidPort } from "./utils.js";
 import { logger } from "./logger.js";
@@ -360,7 +360,7 @@ export function createBackup(config: SettingsConfig): BackupManifest {
 
 export function writeBackupFile(name: string, manifest: BackupManifest): void {
   const filePath = resolve(`.${name}.porterman.backup.env`);
-  require("node:fs").writeFileSync(filePath, JSON.stringify(manifest, null, 2));
+  writeFileSync(filePath, JSON.stringify(manifest, null, 2));
 }
 
 export function readBackupFile(name: string): BackupManifest | null {
@@ -376,7 +376,7 @@ export function readBackupFile(name: string): BackupManifest | null {
   } catch {
     const corruptedPath = filePath + ".corrupted";
     try {
-      require("node:fs").renameSync(filePath, corruptedPath);
+      renameSync(filePath, corruptedPath);
       logger.warn(
         `Backup file was corrupted, renamed to ${corruptedPath}`
       );
