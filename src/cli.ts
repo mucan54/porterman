@@ -51,16 +51,17 @@ cli
     }
 
     // ── Settings mode detection ──────────────────────────────────
+    // If the first argument is not a valid port number, treat it as a settings name.
+    // This ensures "porterman expose settings" always enters settings mode,
+    // and gives a clear "file not found" error if the config doesn't exist.
     const settingsName = portsRaw?.[0];
-    const settingsFile = settingsName
-      ? `${settingsName}.porterman.json`
-      : null;
-
-    if (
-      settingsFile &&
+    const isSettingsMode =
+      settingsName &&
       portsRaw.length === 1 &&
-      existsSync(resolve(settingsFile))
-    ) {
+      isNaN(parseInt(settingsName, 10));
+
+    if (isSettingsMode) {
+      const settingsFile = `${settingsName}.porterman.json`;
       // Load and validate config
       let config;
       try {
