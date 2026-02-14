@@ -85,6 +85,55 @@ eval $(porterman expose 3000:FRONTEND_URL --eval)
 echo $FRONTEND_URL
 ```
 
+### Settings file mode
+
+Create a `<name>.porterman.json` file in your project root to define tunnels and environment variable mappings declaratively:
+
+```json
+{
+  "tunnels": {
+    "3000": {
+      "envFile": ".env",
+      "variables": {
+        "PUBLIC_API_URL": "$tunnelUrl",
+        "PUBLIC_REVERB_PORT": 443
+      }
+    },
+    "5177": {
+      "envFile": ".env",
+      "variables": {
+        "PUBLIC_FRONTEND_URL": "$tunnelUrl"
+      }
+    }
+  }
+}
+```
+
+Then run:
+
+```bash
+porterman expose settings    # reads settings.porterman.json
+porterman expose dev         # reads dev.porterman.json
+porterman expose production  # reads production.porterman.json
+```
+
+This will:
+1. Start a Cloudflare tunnel for each port
+2. Replace `$tunnelUrl` with the actual tunnel URL in your env files
+3. Write static values (like `443`) as-is
+4. Back up original values to `.<name>.porterman.backup.env`
+5. Restore everything on shutdown (Ctrl+C)
+
+If porterman crashes, the backup file survives. On next startup, porterman detects it and restores your original values before proceeding.
+
+**`.gitignore` recommendation:**
+
+```
+*.porterman.backup.env
+```
+
+The `*.porterman.json` config files should be committed (they're project config).
+
 ### Verbose mode
 
 ```bash
@@ -122,6 +171,7 @@ porterman --version       # Show version
 - **Works anywhere** -- behind NAT, firewalls, no public IP required
 - **Multi-port** -- expose multiple services simultaneously
 - **Env variable mapping** -- auto-write tunnel URLs to `.env` files
+- **Settings file mode** -- declarative config via `<name>.porterman.json` with automatic backup/restore
 - **WebSocket support** -- full WS/WSS proxying
 - **No account needed** -- uses Cloudflare Quick Tunnels (free)
 - **Auto-install** -- downloads `cloudflared` binary automatically on first run

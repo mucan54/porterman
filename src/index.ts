@@ -4,3 +4,16 @@ export { parsePortArg, writeEnvFile, cleanEnvFile, formatExports, type EnvMappin
 export { logger, setVerbose } from "./logger.js";
 export { paths, type PortermanConfig } from "./config.js";
 export { isPortAvailable, isValidPort } from "./utils.js";
+export {
+  loadSettings,
+  createBackup,
+  applySettings,
+  restoreFromBackup,
+  parseEnvFile,
+  setEnvVariable,
+  removeEnvVariable,
+  type SettingsConfig,
+  type TunnelSettings,
+  type BackupManifest,
+  type BackupEntry,
+} from "./settings.js";

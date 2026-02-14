@@ -1,11 +1,21 @@
 import cac from "cac";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { startServer, type PortMapping } from "./server.js";
 import { parsePortArg, formatExports } from "./env.js";
-import { readPidFile, pidFileExists } from "./config.js";
-import { logger } from "./logger.js";
+import { readPidFile, pidFileExists, writePidFile, paths } from "./config.js";
+import { logger, setVerbose } from "./logger.js";
+import { startTunnels } from "./tunnel.js";
+import {
+  loadSettings,
+  createBackup,
+  writeBackupFile,
+  readBackupFile,
+  applySettings,
+  restoreFromBackup,
+  getBackupFilePath,
+} from "./settings.js";
 
 // Read version from package.json
 let version = "1.0.0";
@@ -37,6 +47,176 @@ cli
       logger.banner(version);
       logger.blank();
     }
+
+    // ── Settings mode detection ──────────────────────────────────
+    const settingsName = portsRaw?.[0];
+    const settingsFile = settingsName
+      ? `${settingsName}.porterman.json`
+      : null;
+
+    if (
+      settingsFile &&
+      portsRaw.length === 1 &&
+      existsSync(resolve(settingsFile))
+    ) {
+      if (options.verbose) setVerbose(true);
+
+      logger.info(`Loading ${settingsFile}...`);
+
+      // Load and validate config
+      let config;
+      try {
+        config = loadSettings(settingsName);
+      } catch (err) {
+        logger.error(err instanceof Error ? err.message : String(err));
+        process.exit(1);
+      }
+
+      // Crash recovery: if backup exists from a previous run, restore first
+      const existingBackup = readBackupFile(settingsName);
+      if (existingBackup) {
+        logger.warn(
+          "Found backup from a previous session — restoring original values first..."
+        );
+        try {
+          await restoreFromBackup(settingsName, existingBackup);
+          logger.success("Previous session restored successfully");
+        } catch (err) {
+          logger.warn(
+            `Failed to restore previous backup: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
+
+      // Extract unique ports
+      const ports = [
+        ...new Set(
+          Object.keys(config.tunnels).map((p) => parseInt(p, 10))
+        ),
+      ];
+
+      // Create backup before modifying anything
+      const manifest = createBackup(config);
+      writeBackupFile(settingsName, manifest);
+
+      logger.info(
+        `Starting ${ports.length} tunnel${ports.length > 1 ? "s" : ""}...`
+      );
+
+      // Start tunnels
+      let tunnels;
+      try {
+        tunnels = await startTunnels(ports, { verbose: options.verbose });
+      } catch (err) {
+        // Cleanup backup on tunnel failure
+        try {
+          const { unlink: unlinkFile } = await import("node:fs/promises");
+          await unlinkFile(getBackupFilePath(settingsName));
+        } catch {}
+        logger.error(err instanceof Error ? err.message : String(err));
+        process.exit(1);
+      }
+
+      // Write PID file
+      await writePidFile(process.pid);
+
+      // Build tunnel URL map
+      const tunnelUrls = new Map<number, string>();
+      for (const tunnel of tunnels) {
+        tunnelUrls.set(tunnel.port, tunnel.url);
+      }
+
+      logger.success("Tunnels ready!");
+      logger.blank();
+
+      for (const tunnel of tunnels) {
+        logger.link(
+          `http://localhost:${tunnel.port}`,
+          tunnel.url
+        );
+      }
+
+      // Apply settings (write env variables)
+      try {
+        await applySettings(config, tunnelUrls);
+      } catch (err) {
+        logger.error(
+          `Failed to apply settings: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+
+      // Log modified variables
+      logger.blank();
+      logger.success("Environment variables updated:");
+      for (const [portStr, tunnel] of Object.entries(config.tunnels)) {
+        const port = parseInt(portStr, 10);
+        const url = tunnelUrls.get(port);
+        if (!url) continue;
+        for (const [key, rawValue] of Object.entries(tunnel.variables)) {
+          const value =
+            rawValue === "$tunnelUrl" ? url : String(rawValue);
+          logger.info(
+            `  ${tunnel.envFile} → ${key} = ${value}`
+          );
+        }
+      }
+
+      logger.blank();
+      logger.success(
+        `Backup saved to .${settingsName}.porterman.backup.env`
+      );
+      logger.blank();
+      console.log("  Press Ctrl+C to stop");
+      logger.blank();
+
+      // Shutdown handler
+      let isShuttingDown = false;
+      const shutdown = async () => {
+        if (isShuttingDown) return;
+        isShuttingDown = true;
+
+        logger.info("Shutting down tunnels...");
+
+        try {
+          await restoreFromBackup(settingsName, manifest);
+          logger.success("Environment variables restored from backup");
+        } catch (err) {
+          logger.error(
+            `Failed to restore backup: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+
+        for (const tunnel of tunnels) {
+          tunnel.stop();
+        }
+
+        // Clean PID file
+        try {
+          const { unlink: unlinkFile } = await import("node:fs/promises");
+          await unlinkFile(paths.pidFile);
+        } catch {}
+
+        logger.success("Stopped");
+        process.exit(0);
+      };
+
+      process.on("SIGINT", shutdown);
+      process.on("SIGTERM", shutdown);
+      process.on("uncaughtException", async (err) => {
+        logger.error(`Unexpected error: ${err.message}`);
+        await shutdown();
+      });
+      process.on("unhandledRejection", async (reason) => {
+        logger.error(
+          `Unhandled rejection: ${reason instanceof Error ? reason.message : String(reason)}`
+        );
+        await shutdown();
+      });
+
+      return;
+    }
+
+    // ── Normal port-based expose flow ────────────────────────────
 
     if (!portsRaw || portsRaw.length === 0) {
       logger.error("At least one port is required");
