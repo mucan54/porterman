@@ -661,6 +661,30 @@
       bindGlobalEvents();
     }
 
+    // ─── Helpers ─────────────────────────────────────────────────
+    function escapeAttr(str) {
+      return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // Look up state objects by id
+    function findTunnel(id) { return state.tunnels.find(t => t.id === id); }
+
+    function findFile(tunnelId, fileId) {
+      const t = findTunnel(tunnelId);
+      return t ? t.files.find(f => f.id === fileId) : null;
+    }
+
+    function findVariable(tunnelId, fileId, varId) {
+      const f = findFile(tunnelId, fileId);
+      return f ? f.variables.find(v => v.id === varId) : null;
+    }
+
     // ─── Tunnel Management ───────────────────────────────────────
     function addTunnel(port = '', files = null) {
       const tunnel = {
@@ -672,20 +696,14 @@
         tunnel.files.push(createFileTarget());
       }
       state.tunnels.push(tunnel);
-      render();
+      renderFullDOM();
       return tunnel;
     }
 
     function removeTunnel(id) {
       state.tunnels = state.tunnels.filter(t => t.id !== id);
       if (state.tunnels.length === 0) addTunnel();
-      else render();
-    }
-
-    function updateTunnelPort(id, port) {
-      const t = state.tunnels.find(t => t.id === id);
-      if (t) t.port = port;
-      render();
+      else renderFullDOM();
     }
 
     // ─── File Target Management ──────────────────────────────────
@@ -700,28 +718,19 @@
     }
 
     function addFileTarget(tunnelId) {
-      const t = state.tunnels.find(t => t.id === tunnelId);
+      const t = findTunnel(tunnelId);
       if (t) {
         t.files.push(createFileTarget());
-        render();
+        renderFullDOM();
       }
     }
 
     function removeFileTarget(tunnelId, fileId) {
-      const t = state.tunnels.find(t => t.id === tunnelId);
+      const t = findTunnel(tunnelId);
       if (t) {
         t.files = t.files.filter(f => f.id !== fileId);
         if (t.files.length === 0) t.files.push(createFileTarget());
-        render();
-      }
-    }
-
-    function updateFileTarget(tunnelId, fileId, field, value) {
-      const t = state.tunnels.find(t => t.id === tunnelId);
-      if (t) {
-        const f = t.files.find(f => f.id === fileId);
-        if (f) f[field] = value;
-        render();
+        renderFullDOM();
       }
     }
 
@@ -731,36 +740,24 @@
     }
 
     function addVariable(tunnelId, fileId) {
-      const t = state.tunnels.find(t => t.id === tunnelId);
+      const t = findTunnel(tunnelId);
       if (t) {
         const f = t.files.find(f => f.id === fileId);
         if (f) {
           f.variables.push(createVariable());
-          render();
+          renderFullDOM();
         }
       }
     }
 
     function removeVariable(tunnelId, fileId, varId) {
-      const t = state.tunnels.find(t => t.id === tunnelId);
+      const t = findTunnel(tunnelId);
       if (t) {
         const f = t.files.find(f => f.id === fileId);
         if (f) {
           f.variables = f.variables.filter(v => v.id !== varId);
           if (f.variables.length === 0) f.variables.push(createVariable());
-          render();
-        }
-      }
-    }
-
-    function updateVariable(tunnelId, fileId, varId, field, value) {
-      const t = state.tunnels.find(t => t.id === tunnelId);
-      if (t) {
-        const f = t.files.find(f => f.id === fileId);
-        if (f) {
-          const v = f.variables.find(v => v.id === varId);
-          if (v) v[field] = value;
-          render();
+          renderFullDOM();
         }
       }
     }
@@ -780,10 +777,8 @@
           const variables = {};
           for (const v of file.variables) {
             if (!v.key.trim()) continue;
-            // Determine value
             let val = v.value;
             if (val !== '$tunnelUrl' && val !== '$tunnelHostname') {
-              // Try to parse as number
               const num = Number(val);
               if (!isNaN(num) && val.trim() !== '') {
                 val = num;
@@ -795,14 +790,9 @@
           if (Object.keys(variables).length === 0) continue;
 
           const entry = { file: file.file.trim(), variables };
-          if (file.filePath.trim()) {
-            entry.filePath = file.filePath.trim();
-          }
-          if (file.type !== 'auto') {
-            entry.type = file.type;
-          }
+          if (file.filePath.trim()) entry.filePath = file.filePath.trim();
+          if (file.type !== 'auto') entry.type = file.type;
 
-          // Order: file, filePath, type, variables
           const ordered = {};
           ordered.file = entry.file;
           if (entry.filePath) ordered.filePath = entry.filePath;
@@ -826,143 +816,325 @@
       return config;
     }
 
-    // ─── Render ──────────────────────────────────────────────────
-    function render() {
-      renderTunnels();
-      renderPreview();
-    }
-
-    function renderTunnels() {
+    // ─── Rendering ───────────────────────────────────────────────
+    // Full DOM rebuild — only called for structural changes
+    // (add/remove tunnel, add/remove file, add/remove variable, import, reset)
+    function renderFullDOM() {
       const container = document.getElementById('tunnels-container');
       container.innerHTML = '';
 
       for (const tunnel of state.tunnels) {
-        const card = document.createElement('div');
-        card.className = 'tunnel-card';
-
-        const portVal = tunnel.port || '?';
-        const portNum = parseInt(tunnel.port);
-        const portValid = !tunnel.port || (portNum >= 1 && portNum <= 65535);
-
-        card.innerHTML = `
-          <div class="tunnel-header">
-            <h3>
-              <span class="port-badge">:${portVal}</span>
-              Tunnel
-            </h3>
-            <button class="btn-icon" onclick="removeTunnel(${tunnel.id})" title="Remove tunnel">&times;</button>
-          </div>
-          <div class="field">
-            <label>Port</label>
-            <input type="number" min="1" max="65535" placeholder="3000"
-                   value="${tunnel.port}"
-                   class="${!portValid ? 'invalid' : ''}"
-                   oninput="updateTunnelPort(${tunnel.id}, this.value)">
-            ${!portValid ? '<div class="validation-msg">Port must be 1-65535</div>' : ''}
-          </div>
-          <hr class="separator">
-          <label style="margin-bottom: 0.5rem; display: block;">Environment / Config Files</label>
-          <div id="files-${tunnel.id}"></div>
-          <button class="btn btn-outline btn-sm" onclick="addFileTarget(${tunnel.id})" style="width: 100%; margin-top: 0.25rem;">
-            + Add File
-          </button>
-        `;
-
-        container.appendChild(card);
-
-        const filesContainer = card.querySelector(`#files-${tunnel.id}`);
-        for (const file of tunnel.files) {
-          filesContainer.appendChild(renderFileTarget(tunnel.id, file));
-        }
-      }
-    }
-
-    function renderFileTarget(tunnelId, file) {
-      const el = document.createElement('div');
-      el.className = 'file-target';
-
-      let fileTypeDisplay = file.type;
-      if (file.type === 'auto') {
-        fileTypeDisplay = file.file.endsWith('.json') ? 'json (auto)' : 'env (auto)';
+        container.appendChild(buildTunnelCard(tunnel));
       }
 
-      el.innerHTML = `
-        <div class="file-target-header">
-          <h4>${file.file || 'untitled'}</h4>
-          <button class="btn-icon" onclick="removeFileTarget(${tunnelId}, ${file.id})" title="Remove file">&times;</button>
-        </div>
-        <div class="row" style="margin-bottom: 0.65rem;">
-          <div>
-            <label>Filename</label>
-            <input type="text" placeholder=".env" value="${escapeAttr(file.file)}"
-                   oninput="updateFileTarget(${tunnelId}, ${file.id}, 'file', this.value)">
-          </div>
-          <div>
-            <label>File Path (optional)</label>
-            <input type="text" placeholder="./config" value="${escapeAttr(file.filePath)}"
-                   oninput="updateFileTarget(${tunnelId}, ${file.id}, 'filePath', this.value)">
-          </div>
-          <div style="flex: 0 0 110px;">
-            <label>Type</label>
-            <select onchange="updateFileTarget(${tunnelId}, ${file.id}, 'type', this.value)">
-              <option value="auto" ${file.type === 'auto' ? 'selected' : ''}>Auto</option>
-              <option value="env" ${file.type === 'env' ? 'selected' : ''}>env</option>
-              <option value="json" ${file.type === 'json' ? 'selected' : ''}>json</option>
-            </select>
-          </div>
-        </div>
-        <label style="margin-bottom: 0.35rem; display: block;">Variables</label>
-        <div id="vars-${tunnelId}-${file.id}"></div>
-        <button class="btn btn-outline btn-sm" onclick="addVariable(${tunnelId}, ${file.id})" style="margin-top: 0.25rem;">
-          + Add Variable
-        </button>
-      `;
-
-      const varsContainer = el.querySelector(`#vars-${tunnelId}-${file.id}`);
-      for (const v of file.variables) {
-        varsContainer.appendChild(renderVariable(tunnelId, file.id, v));
-      }
-
-      return el;
+      renderPreview();
     }
 
-    function renderVariable(tunnelId, fileId, v) {
-      const el = document.createElement('div');
-      el.className = 'var-row';
-      el.innerHTML = `
-        <input type="text" placeholder="VARIABLE_NAME" value="${escapeAttr(v.key)}"
-               oninput="updateVariable(${tunnelId}, ${fileId}, ${v.id}, 'key', this.value)">
-        <select onchange="updateVariable(${tunnelId}, ${fileId}, ${v.id}, 'value', this.value)"
-                style="width: 160px; flex: none;">
-          <option value="$tunnelUrl" ${v.value === '$tunnelUrl' ? 'selected' : ''}>$tunnelUrl</option>
-          <option value="$tunnelHostname" ${v.value === '$tunnelHostname' ? 'selected' : ''}>$tunnelHostname</option>
-          <option value="443" ${v.value === '443' || v.value === 443 ? 'selected' : ''}>443</option>
-          <option value="__custom__" ${!['$tunnelUrl', '$tunnelHostname', '443'].includes(String(v.value)) ? 'selected' : ''}>Custom...</option>
-        </select>
-        ${!['$tunnelUrl', '$tunnelHostname', '443'].includes(String(v.value))
-          ? `<input type="text" placeholder="value" value="${escapeAttr(String(v.value === '__custom__' ? '' : v.value))}"
-                    style="width: 120px; flex: none;"
-                    oninput="updateVariable(${tunnelId}, ${fileId}, ${v.id}, 'value', this.value)">`
-          : ''}
-        <button class="btn-icon" onclick="removeVariable(${tunnelId}, ${fileId}, ${v.id})" title="Remove">&times;</button>
-      `;
-
-      // Handle the dropdown changing to custom
-      const select = el.querySelector('select');
-      select.addEventListener('change', function() {
-        if (this.value === '__custom__') {
-          // Will re-render with custom input
-          updateVariable(tunnelId, fileId, v.id, 'value', '');
-        }
-      });
-
-      return el;
-    }
-
+    // Only update the JSON preview — called on every keystroke
     function renderPreview() {
       const config = generateSettings();
       const json = JSON.stringify(config, null, 2);
       document.getElementById('preview').textContent = json;
+    }
+
+    function buildTunnelCard(tunnel) {
+      const card = document.createElement('div');
+      card.className = 'tunnel-card';
+      card.dataset.tunnelId = tunnel.id;
+
+      const portVal = tunnel.port || '?';
+      const portNum = parseInt(tunnel.port);
+      const portValid = !tunnel.port || (portNum >= 1 && portNum <= 65535);
+
+      // Header
+      const header = document.createElement('div');
+      header.className = 'tunnel-header';
+      header.innerHTML = `
+        <h3>
+          <span class="port-badge" data-port-badge="${tunnel.id}">:${escapeHtml(portVal)}</span>
+          Tunnel
+        </h3>
+      `;
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'btn-icon';
+      removeBtn.title = 'Remove tunnel';
+      removeBtn.innerHTML = '&times;';
+      removeBtn.addEventListener('click', () => removeTunnel(tunnel.id));
+      header.appendChild(removeBtn);
+      card.appendChild(header);
+
+      // Port field
+      const portField = document.createElement('div');
+      portField.className = 'field';
+      const portLabel = document.createElement('label');
+      portLabel.textContent = 'Port';
+      portField.appendChild(portLabel);
+
+      const portInput = document.createElement('input');
+      portInput.type = 'number';
+      portInput.min = '1';
+      portInput.max = '65535';
+      portInput.placeholder = '3000';
+      portInput.value = tunnel.port;
+      if (!portValid) portInput.classList.add('invalid');
+      portInput.addEventListener('input', function() {
+        tunnel.port = this.value;
+        // Update badge text in-place (no DOM rebuild)
+        const badge = card.querySelector(`[data-port-badge="${tunnel.id}"]`);
+        if (badge) badge.textContent = ':' + (this.value || '?');
+        // Update validation styling in-place
+        const pNum = parseInt(this.value);
+        const valid = !this.value || (pNum >= 1 && pNum <= 65535);
+        this.classList.toggle('invalid', !valid);
+        const existingMsg = portField.querySelector('.validation-msg');
+        if (!valid && !existingMsg) {
+          const msg = document.createElement('div');
+          msg.className = 'validation-msg';
+          msg.textContent = 'Port must be 1-65535';
+          portField.appendChild(msg);
+        } else if (valid && existingMsg) {
+          existingMsg.remove();
+        }
+        renderPreview();
+      });
+      portField.appendChild(portInput);
+
+      if (!portValid) {
+        const msg = document.createElement('div');
+        msg.className = 'validation-msg';
+        msg.textContent = 'Port must be 1-65535';
+        portField.appendChild(msg);
+      }
+      card.appendChild(portField);
+
+      // Separator
+      const sep = document.createElement('hr');
+      sep.className = 'separator';
+      card.appendChild(sep);
+
+      const filesLabel = document.createElement('label');
+      filesLabel.style.cssText = 'margin-bottom: 0.5rem; display: block;';
+      filesLabel.textContent = 'Environment / Config Files';
+      card.appendChild(filesLabel);
+
+      // File targets container
+      const filesContainer = document.createElement('div');
+      filesContainer.dataset.filesFor = tunnel.id;
+      for (const file of tunnel.files) {
+        filesContainer.appendChild(buildFileTarget(tunnel.id, file));
+      }
+      card.appendChild(filesContainer);
+
+      // Add file button
+      const addFileBtn = document.createElement('button');
+      addFileBtn.className = 'btn btn-outline btn-sm';
+      addFileBtn.style.cssText = 'width: 100%; margin-top: 0.25rem;';
+      addFileBtn.textContent = '+ Add File';
+      addFileBtn.addEventListener('click', () => addFileTarget(tunnel.id));
+      card.appendChild(addFileBtn);
+
+      return card;
+    }
+
+    function buildFileTarget(tunnelId, file) {
+      const el = document.createElement('div');
+      el.className = 'file-target';
+      el.dataset.fileId = file.id;
+
+      // Header
+      const ftHeader = document.createElement('div');
+      ftHeader.className = 'file-target-header';
+      const ftTitle = document.createElement('h4');
+      ftTitle.dataset.fileTitle = file.id;
+      ftTitle.textContent = file.file || 'untitled';
+      ftHeader.appendChild(ftTitle);
+      const ftRemove = document.createElement('button');
+      ftRemove.className = 'btn-icon';
+      ftRemove.title = 'Remove file';
+      ftRemove.innerHTML = '&times;';
+      ftRemove.addEventListener('click', () => removeFileTarget(tunnelId, file.id));
+      ftHeader.appendChild(ftRemove);
+      el.appendChild(ftHeader);
+
+      // Row: filename, filePath, type
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.style.marginBottom = '0.65rem';
+
+      // Filename
+      const fnDiv = document.createElement('div');
+      const fnLabel = document.createElement('label');
+      fnLabel.textContent = 'Filename';
+      fnDiv.appendChild(fnLabel);
+      const fnInput = document.createElement('input');
+      fnInput.type = 'text';
+      fnInput.placeholder = '.env';
+      fnInput.value = file.file;
+      fnInput.addEventListener('input', function() {
+        file.file = this.value;
+        // Update title in-place
+        const title = el.querySelector(`[data-file-title="${file.id}"]`);
+        if (title) title.textContent = this.value || 'untitled';
+        renderPreview();
+      });
+      fnDiv.appendChild(fnInput);
+      row.appendChild(fnDiv);
+
+      // FilePath
+      const fpDiv = document.createElement('div');
+      const fpLabel = document.createElement('label');
+      fpLabel.textContent = 'File Path (optional)';
+      fpDiv.appendChild(fpLabel);
+      const fpInput = document.createElement('input');
+      fpInput.type = 'text';
+      fpInput.placeholder = './config';
+      fpInput.value = file.filePath;
+      fpInput.addEventListener('input', function() {
+        file.filePath = this.value;
+        renderPreview();
+      });
+      fpDiv.appendChild(fpInput);
+      row.appendChild(fpDiv);
+
+      // Type
+      const typeDiv = document.createElement('div');
+      typeDiv.style.cssText = 'flex: 0 0 110px;';
+      const typeLabel = document.createElement('label');
+      typeLabel.textContent = 'Type';
+      typeDiv.appendChild(typeLabel);
+      const typeSelect = document.createElement('select');
+      ['auto', 'env', 'json'].forEach(val => {
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = val === 'auto' ? 'Auto' : val;
+        if (file.type === val) opt.selected = true;
+        typeSelect.appendChild(opt);
+      });
+      typeSelect.addEventListener('change', function() {
+        file.type = this.value;
+        renderPreview();
+      });
+      typeDiv.appendChild(typeSelect);
+      row.appendChild(typeDiv);
+
+      el.appendChild(row);
+
+      // Variables label
+      const varsLabel = document.createElement('label');
+      varsLabel.style.cssText = 'margin-bottom: 0.35rem; display: block;';
+      varsLabel.textContent = 'Variables';
+      el.appendChild(varsLabel);
+
+      // Variables container
+      const varsContainer = document.createElement('div');
+      varsContainer.dataset.varsFor = `${tunnelId}-${file.id}`;
+      for (const v of file.variables) {
+        varsContainer.appendChild(buildVariable(tunnelId, file.id, v));
+      }
+      el.appendChild(varsContainer);
+
+      // Add variable button
+      const addVarBtn = document.createElement('button');
+      addVarBtn.className = 'btn btn-outline btn-sm';
+      addVarBtn.style.marginTop = '0.25rem';
+      addVarBtn.textContent = '+ Add Variable';
+      addVarBtn.addEventListener('click', () => addVariable(tunnelId, file.id));
+      el.appendChild(addVarBtn);
+
+      return el;
+    }
+
+    const PRESET_VALUES = ['$tunnelUrl', '$tunnelHostname', '443'];
+
+    function buildVariable(tunnelId, fileId, v) {
+      const el = document.createElement('div');
+      el.className = 'var-row';
+      el.dataset.varId = v.id;
+
+      const isCustom = !PRESET_VALUES.includes(String(v.value));
+
+      // Key input
+      const keyInput = document.createElement('input');
+      keyInput.type = 'text';
+      keyInput.placeholder = 'VARIABLE_NAME';
+      keyInput.value = v.key;
+      keyInput.addEventListener('input', function() {
+        v.key = this.value;
+        renderPreview();
+      });
+      el.appendChild(keyInput);
+
+      // Value select
+      const select = document.createElement('select');
+      select.style.cssText = 'width: 160px; flex: none;';
+      [
+        { val: '$tunnelUrl', label: '$tunnelUrl' },
+        { val: '$tunnelHostname', label: '$tunnelHostname' },
+        { val: '443', label: '443' },
+        { val: '__custom__', label: 'Custom...' }
+      ].forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.val;
+        opt.textContent = item.label;
+        if (item.val === '__custom__' && isCustom) opt.selected = true;
+        else if (item.val === String(v.value)) opt.selected = true;
+        select.appendChild(opt);
+      });
+
+      // Custom value input (may or may not exist)
+      let customInput = null;
+      if (isCustom) {
+        customInput = document.createElement('input');
+        customInput.type = 'text';
+        customInput.placeholder = 'value';
+        customInput.value = v.value;
+        customInput.style.cssText = 'width: 120px; flex: none;';
+        customInput.addEventListener('input', function() {
+          v.value = this.value;
+          renderPreview();
+        });
+      }
+
+      select.addEventListener('change', function() {
+        if (this.value === '__custom__') {
+          v.value = '';
+          // Insert custom input if not already present
+          if (!customInput) {
+            customInput = document.createElement('input');
+            customInput.type = 'text';
+            customInput.placeholder = 'value';
+            customInput.value = '';
+            customInput.style.cssText = 'width: 120px; flex: none;';
+            customInput.addEventListener('input', function() {
+              v.value = this.value;
+              renderPreview();
+            });
+            el.insertBefore(customInput, removeBtn);
+            customInput.focus();
+          }
+        } else {
+          v.value = this.value;
+          // Remove custom input if present
+          if (customInput) {
+            customInput.remove();
+            customInput = null;
+          }
+        }
+        renderPreview();
+      });
+      el.appendChild(select);
+
+      if (customInput) el.appendChild(customInput);
+
+      // Remove button
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'btn-icon';
+      removeBtn.title = 'Remove';
+      removeBtn.innerHTML = '&times;';
+      removeBtn.addEventListener('click', () => removeVariable(tunnelId, fileId, v.id));
+      el.appendChild(removeBtn);
+
+      return el;
     }
 
     // ─── Actions ─────────────────────────────────────────────────
@@ -1017,17 +1189,8 @@
         state.tunnels = [];
         nextId = 1;
 
-        // Set globals
-        if (config.cleanup === false) {
-          document.getElementById('cleanup').checked = false;
-        } else {
-          document.getElementById('cleanup').checked = true;
-        }
-        if (config.verbose === true) {
-          document.getElementById('verbose').checked = true;
-        } else {
-          document.getElementById('verbose').checked = false;
-        }
+        document.getElementById('cleanup').checked = config.cleanup !== false;
+        document.getElementById('verbose').checked = config.verbose === true;
 
         for (const [port, tunnelConfig] of Object.entries(config.tunnels)) {
           const files = [];
@@ -1053,15 +1216,10 @@
         }
 
         if (state.tunnels.length === 0) addTunnel();
-        render();
+        else renderFullDOM();
       } catch (e) {
         alert('Failed to parse JSON: ' + e.message);
       }
-    }
-
-    // ─── Helpers ─────────────────────────────────────────────────
-    function escapeAttr(str) {
-      return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
     // ─── Event Bindings ──────────────────────────────────────────
