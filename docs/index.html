@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Porterman Settings Generator</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-hover: #222633;
+      --border: #2e3345;
+      --border-focus: #6366f1;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --danger: #ef4444;
+      --danger-hover: #f87171;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --radius: 8px;
+      --radius-lg: 12px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span {
+      color: var(--accent);
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+    }
+
+    .panel-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .panel-title .icon {
+      font-size: 1.2rem;
+    }
+
+    /* Form elements */
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 0.35rem;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+      width: 100%;
+      padding: 0.55rem 0.75rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--border-focus);
+    }
+
+    input::placeholder {
+      color: #4a5068;
+    }
+
+    .row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-end;
+    }
+
+    .row > * {
+      flex: 1;
+    }
+
+    .field {
+      margin-bottom: 1rem;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-danger {
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid var(--danger);
+      padding: 0.35rem 0.65rem;
+      font-size: 0.8rem;
+    }
+
+    .btn-danger:hover {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px dashed var(--border);
+    }
+
+    .btn-outline:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: #fff;
+      font-size: 1rem;
+      padding: 0.65rem 1.5rem;
+    }
+
+    .btn-success:hover {
+      opacity: 0.9;
+    }
+
+    .btn-sm {
+      padding: 0.3rem 0.6rem;
+      font-size: 0.78rem;
+    }
+
+    .btn-icon {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      width: 32px;
+      height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius);
+      cursor: pointer;
+      padding: 0;
+      font-size: 1rem;
+      transition: all 0.15s;
+    }
+
+    .btn-icon:hover {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    .btn-icon.add:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Tunnel card */
+    .tunnel-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .tunnel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .tunnel-header h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .port-badge {
+      background: var(--accent);
+      color: #fff;
+      padding: 0.15rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+
+    /* File target */
+    .file-target {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.85rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .file-target-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.65rem;
+    }
+
+    .file-target-header h4 {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    /* Variables */
+    .var-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .var-row input {
+      flex: 1;
+    }
+
+    .var-row select {
+      width: 160px;
+      flex: none;
+    }
+
+    .var-row .btn-icon {
+      flex: none;
+    }
+
+    /* Separator */
+    .separator {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 1rem 0;
+    }
+
+    /* Toggle */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 0;
+    }
+
+    .toggle-row label {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      cursor: pointer;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--border);
+      border-radius: 999px;
+      transition: background 0.2s;
+    }
+
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      left: 3px;
+      bottom: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+
+    .toggle input:checked + .toggle-slider {
+      background: var(--accent);
+    }
+
+    .toggle input:checked + .toggle-slider::before {
+      transform: translateX(20px);
+    }
+
+    /* Preview */
+    .preview-area {
+      position: relative;
+    }
+
+    .preview-code {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      overflow-x: auto;
+      white-space: pre;
+      color: var(--text);
+      min-height: 200px;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 0.3rem 0.6rem;
+      border-radius: var(--radius);
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .copy-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .copy-btn.copied {
+      border-color: var(--success);
+      color: var(--success);
+    }
+
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+
+    /* Filename input area */
+    .filename-row {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 1rem;
+    }
+
+    .filename-row input {
+      border-radius: var(--radius) 0 0 var(--radius);
+      border-right: none;
+      text-align: right;
+      width: 160px;
+    }
+
+    .filename-row .suffix {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      padding: 0.55rem 0.75rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+
+    /* Hint */
+    .hint {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+    }
+
+    /* Info box */
+    .info-box {
+      background: rgba(99, 102, 241, 0.08);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      border-radius: var(--radius);
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .info-box code {
+      background: var(--bg);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      color: var(--accent);
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 2rem 1rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 999px;
+    }
+
+    /* Validation */
+    input.invalid {
+      border-color: var(--danger);
+    }
+
+    .validation-msg {
+      color: var(--danger);
+      font-size: 0.78rem;
+      margin-top: 0.2rem;
+    }
+
+    /* Import area */
+    .import-area {
+      margin-top: 1rem;
+    }
+
+    .import-dropzone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    .import-dropzone:hover {
+      border-color: var(--accent);
+    }
+
+    .import-dropzone.dragover {
+      border-color: var(--accent);
+      background: rgba(99, 102, 241, 0.05);
+    }
+
+    .hidden-input {
+      display: none;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem 0 1rem;
+      color: var(--text-muted);
+      font-size: 0.82rem;
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1><span>Porterman</span> Settings Generator</h1>
+      <p>Build your <code>settings.porterman.json</code> configuration visually</p>
+    </header>
+
+    <div class="layout">
+      <!-- Left: Configuration -->
+      <div class="config-side">
+        <!-- Setting Name & Globals -->
+        <div class="panel" style="margin-bottom: 1.5rem;">
+          <div class="panel-title"><span class="icon">&#9881;</span> General</div>
+
+          <div class="field">
+            <label for="settingName">Setting Name</label>
+            <div class="filename-row">
+              <input type="text" id="settingName" value="settings" placeholder="settings">
+              <span class="suffix">.porterman.json</span>
+            </div>
+            <div class="hint">Run with: <code>porterman expose <span id="settingNameHint">settings</span></code></div>
+          </div>
+
+          <div class="toggle-row">
+            <label>Cleanup backup on shutdown</label>
+            <label class="toggle">
+              <input type="checkbox" id="cleanup" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="toggle-row">
+            <label>Verbose logging</label>
+            <label class="toggle">
+              <input type="checkbox" id="verbose">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Tunnels -->
+        <div class="panel">
+          <div class="panel-title"><span class="icon">&#9782;</span> Tunnels</div>
+
+          <div class="info-box">
+            Each tunnel exposes a local port. Use <code>$tunnelUrl</code> for the full URL or <code>$tunnelHostname</code> for the hostname only. Values can also be static strings or numbers.
+          </div>
+
+          <div id="tunnels-container">
+            <!-- Tunnel cards rendered by JS -->
+          </div>
+
+          <button class="btn btn-outline" onclick="addTunnel()" style="width: 100%;">
+            + Add Tunnel
+          </button>
+        </div>
+
+        <!-- Import -->
+        <div class="panel" style="margin-top: 1.5rem;">
+          <div class="panel-title"><span class="icon">&#8593;</span> Import Existing</div>
+          <div class="import-dropzone" id="import-dropzone"
+               onclick="document.getElementById('import-file').click()">
+            Drop a <strong>.porterman.json</strong> file here or click to browse
+          </div>
+          <input type="file" class="hidden-input" id="import-file" accept=".json">
+        </div>
+      </div>
+
+      <!-- Right: Preview & Download -->
+      <div class="preview-side" style="position: sticky; top: 1rem;">
+        <div class="panel">
+          <div class="panel-title"><span class="icon">&#123;&#125;</span> Preview</div>
+
+          <div class="preview-area">
+            <button class="copy-btn" id="copy-btn" onclick="copyToClipboard()">Copy</button>
+            <div class="preview-code" id="preview"></div>
+          </div>
+
+          <div class="actions">
+            <button class="btn btn-success" onclick="downloadSettings()">
+              &#8595; Download
+            </button>
+            <button class="btn btn-primary" onclick="copyToClipboard()">
+              Copy JSON
+            </button>
+            <button class="btn btn-danger" onclick="resetAll()">
+              Reset
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <a href="https://github.com/mucan54/porterman" target="_blank">Porterman</a> &mdash; Zero-config HTTPS tunnels powered by Cloudflare
+    </footer>
+  </div>
+
+  <script>
+    // ─── State ───────────────────────────────────────────────────
+    let state = {
+      tunnels: []
+      // Each tunnel: { id, port, files: [{ id, file, filePath, type, variables: [{ id, key, value }] }] }
+    };
+
+    let nextId = 1;
+    function uid() { return nextId++; }
+
+    // ─── Init ────────────────────────────────────────────────────
+    function init() {
+      addTunnel();
+      bindGlobalEvents();
+    }
+
+    // ─── Tunnel Management ───────────────────────────────────────
+    function addTunnel(port = '', files = null) {
+      const tunnel = {
+        id: uid(),
+        port: port || '',
+        files: files || []
+      };
+      if (!files) {
+        tunnel.files.push(createFileTarget());
+      }
+      state.tunnels.push(tunnel);
+      render();
+      return tunnel;
+    }
+
+    function removeTunnel(id) {
+      state.tunnels = state.tunnels.filter(t => t.id !== id);
+      if (state.tunnels.length === 0) addTunnel();
+      else render();
+    }
+
+    function updateTunnelPort(id, port) {
+      const t = state.tunnels.find(t => t.id === id);
+      if (t) t.port = port;
+      render();
+    }
+
+    // ─── File Target Management ──────────────────────────────────
+    function createFileTarget(file, filePath, type, variables) {
+      return {
+        id: uid(),
+        file: file || '.env',
+        filePath: filePath || '',
+        type: type || 'auto',
+        variables: variables || [createVariable()]
+      };
+    }
+
+    function addFileTarget(tunnelId) {
+      const t = state.tunnels.find(t => t.id === tunnelId);
+      if (t) {
+        t.files.push(createFileTarget());
+        render();
+      }
+    }
+
+    function removeFileTarget(tunnelId, fileId) {
+      const t = state.tunnels.find(t => t.id === tunnelId);
+      if (t) {
+        t.files = t.files.filter(f => f.id !== fileId);
+        if (t.files.length === 0) t.files.push(createFileTarget());
+        render();
+      }
+    }
+
+    function updateFileTarget(tunnelId, fileId, field, value) {
+      const t = state.tunnels.find(t => t.id === tunnelId);
+      if (t) {
+        const f = t.files.find(f => f.id === fileId);
+        if (f) f[field] = value;
+        render();
+      }
+    }
+
+    // ─── Variable Management ─────────────────────────────────────
+    function createVariable(key, value) {
+      return { id: uid(), key: key || '', value: value || '$tunnelUrl' };
+    }
+
+    function addVariable(tunnelId, fileId) {
+      const t = state.tunnels.find(t => t.id === tunnelId);
+      if (t) {
+        const f = t.files.find(f => f.id === fileId);
+        if (f) {
+          f.variables.push(createVariable());
+          render();
+        }
+      }
+    }
+
+    function removeVariable(tunnelId, fileId, varId) {
+      const t = state.tunnels.find(t => t.id === tunnelId);
+      if (t) {
+        const f = t.files.find(f => f.id === fileId);
+        if (f) {
+          f.variables = f.variables.filter(v => v.id !== varId);
+          if (f.variables.length === 0) f.variables.push(createVariable());
+          render();
+        }
+      }
+    }
+
+    function updateVariable(tunnelId, fileId, varId, field, value) {
+      const t = state.tunnels.find(t => t.id === tunnelId);
+      if (t) {
+        const f = t.files.find(f => f.id === fileId);
+        if (f) {
+          const v = f.variables.find(v => v.id === varId);
+          if (v) v[field] = value;
+          render();
+        }
+      }
+    }
+
+    // ─── Generate JSON ───────────────────────────────────────────
+    function generateSettings() {
+      const config = { tunnels: {} };
+
+      for (const tunnel of state.tunnels) {
+        const port = tunnel.port.trim();
+        if (!port) continue;
+
+        const envFiles = [];
+        for (const file of tunnel.files) {
+          if (!file.file.trim()) continue;
+
+          const variables = {};
+          for (const v of file.variables) {
+            if (!v.key.trim()) continue;
+            // Determine value
+            let val = v.value;
+            if (val !== '$tunnelUrl' && val !== '$tunnelHostname') {
+              // Try to parse as number
+              const num = Number(val);
+              if (!isNaN(num) && val.trim() !== '') {
+                val = num;
+              }
+            }
+            variables[v.key.trim()] = val;
+          }
+
+          if (Object.keys(variables).length === 0) continue;
+
+          const entry = { file: file.file.trim(), variables };
+          if (file.filePath.trim()) {
+            entry.filePath = file.filePath.trim();
+          }
+          if (file.type !== 'auto') {
+            entry.type = file.type;
+          }
+
+          // Order: file, filePath, type, variables
+          const ordered = {};
+          ordered.file = entry.file;
+          if (entry.filePath) ordered.filePath = entry.filePath;
+          if (entry.type) ordered.type = entry.type;
+          ordered.variables = entry.variables;
+
+          envFiles.push(ordered);
+        }
+
+        if (envFiles.length > 0) {
+          config.tunnels[port] = { envFiles };
+        }
+      }
+
+      const cleanup = document.getElementById('cleanup').checked;
+      const verbose = document.getElementById('verbose').checked;
+
+      if (!cleanup) config.cleanup = false;
+      if (verbose) config.verbose = true;
+
+      return config;
+    }
+
+    // ─── Render ──────────────────────────────────────────────────
+    function render() {
+      renderTunnels();
+      renderPreview();
+    }
+
+    function renderTunnels() {
+      const container = document.getElementById('tunnels-container');
+      container.innerHTML = '';
+
+      for (const tunnel of state.tunnels) {
+        const card = document.createElement('div');
+        card.className = 'tunnel-card';
+
+        const portVal = tunnel.port || '?';
+        const portNum = parseInt(tunnel.port);
+        const portValid = !tunnel.port || (portNum >= 1 && portNum <= 65535);
+
+        card.innerHTML = `
+          <div class="tunnel-header">
+            <h3>
+              <span class="port-badge">:${portVal}</span>
+              Tunnel
+            </h3>
+            <button class="btn-icon" onclick="removeTunnel(${tunnel.id})" title="Remove tunnel">&times;</button>
+          </div>
+          <div class="field">
+            <label>Port</label>
+            <input type="number" min="1" max="65535" placeholder="3000"
+                   value="${tunnel.port}"
+                   class="${!portValid ? 'invalid' : ''}"
+                   oninput="updateTunnelPort(${tunnel.id}, this.value)">
+            ${!portValid ? '<div class="validation-msg">Port must be 1-65535</div>' : ''}
+          </div>
+          <hr class="separator">
+          <label style="margin-bottom: 0.5rem; display: block;">Environment / Config Files</label>
+          <div id="files-${tunnel.id}"></div>
+          <button class="btn btn-outline btn-sm" onclick="addFileTarget(${tunnel.id})" style="width: 100%; margin-top: 0.25rem;">
+            + Add File
+          </button>
+        `;
+
+        container.appendChild(card);
+
+        const filesContainer = card.querySelector(`#files-${tunnel.id}`);
+        for (const file of tunnel.files) {
+          filesContainer.appendChild(renderFileTarget(tunnel.id, file));
+        }
+      }
+    }
+
+    function renderFileTarget(tunnelId, file) {
+      const el = document.createElement('div');
+      el.className = 'file-target';
+
+      let fileTypeDisplay = file.type;
+      if (file.type === 'auto') {
+        fileTypeDisplay = file.file.endsWith('.json') ? 'json (auto)' : 'env (auto)';
+      }
+
+      el.innerHTML = `
+        <div class="file-target-header">
+          <h4>${file.file || 'untitled'}</h4>
+          <button class="btn-icon" onclick="removeFileTarget(${tunnelId}, ${file.id})" title="Remove file">&times;</button>
+        </div>
+        <div class="row" style="margin-bottom: 0.65rem;">
+          <div>
+            <label>Filename</label>
+            <input type="text" placeholder=".env" value="${escapeAttr(file.file)}"
+                   oninput="updateFileTarget(${tunnelId}, ${file.id}, 'file', this.value)">
+          </div>
+          <div>
+            <label>File Path (optional)</label>
+            <input type="text" placeholder="./config" value="${escapeAttr(file.filePath)}"
+                   oninput="updateFileTarget(${tunnelId}, ${file.id}, 'filePath', this.value)">
+          </div>
+          <div style="flex: 0 0 110px;">
+            <label>Type</label>
+            <select onchange="updateFileTarget(${tunnelId}, ${file.id}, 'type', this.value)">
+              <option value="auto" ${file.type === 'auto' ? 'selected' : ''}>Auto</option>
+              <option value="env" ${file.type === 'env' ? 'selected' : ''}>env</option>
+              <option value="json" ${file.type === 'json' ? 'selected' : ''}>json</option>
+            </select>
+          </div>
+        </div>
+        <label style="margin-bottom: 0.35rem; display: block;">Variables</label>
+        <div id="vars-${tunnelId}-${file.id}"></div>
+        <button class="btn btn-outline btn-sm" onclick="addVariable(${tunnelId}, ${file.id})" style="margin-top: 0.25rem;">
+          + Add Variable
+        </button>
+      `;
+
+      const varsContainer = el.querySelector(`#vars-${tunnelId}-${file.id}`);
+      for (const v of file.variables) {
+        varsContainer.appendChild(renderVariable(tunnelId, file.id, v));
+      }
+
+      return el;
+    }
+
+    function renderVariable(tunnelId, fileId, v) {
+      const el = document.createElement('div');
+      el.className = 'var-row';
+      el.innerHTML = `
+        <input type="text" placeholder="VARIABLE_NAME" value="${escapeAttr(v.key)}"
+               oninput="updateVariable(${tunnelId}, ${fileId}, ${v.id}, 'key', this.value)">
+        <select onchange="updateVariable(${tunnelId}, ${fileId}, ${v.id}, 'value', this.value)"
+                style="width: 160px; flex: none;">
+          <option value="$tunnelUrl" ${v.value === '$tunnelUrl' ? 'selected' : ''}>$tunnelUrl</option>
+          <option value="$tunnelHostname" ${v.value === '$tunnelHostname' ? 'selected' : ''}>$tunnelHostname</option>
+          <option value="443" ${v.value === '443' || v.value === 443 ? 'selected' : ''}>443</option>
+          <option value="__custom__" ${!['$tunnelUrl', '$tunnelHostname', '443'].includes(String(v.value)) ? 'selected' : ''}>Custom...</option>
+        </select>
+        ${!['$tunnelUrl', '$tunnelHostname', '443'].includes(String(v.value))
+          ? `<input type="text" placeholder="value" value="${escapeAttr(String(v.value === '__custom__' ? '' : v.value))}"
+                    style="width: 120px; flex: none;"
+                    oninput="updateVariable(${tunnelId}, ${fileId}, ${v.id}, 'value', this.value)">`
+          : ''}
+        <button class="btn-icon" onclick="removeVariable(${tunnelId}, ${fileId}, ${v.id})" title="Remove">&times;</button>
+      `;
+
+      // Handle the dropdown changing to custom
+      const select = el.querySelector('select');
+      select.addEventListener('change', function() {
+        if (this.value === '__custom__') {
+          // Will re-render with custom input
+          updateVariable(tunnelId, fileId, v.id, 'value', '');
+        }
+      });
+
+      return el;
+    }
+
+    function renderPreview() {
+      const config = generateSettings();
+      const json = JSON.stringify(config, null, 2);
+      document.getElementById('preview').textContent = json;
+    }
+
+    // ─── Actions ─────────────────────────────────────────────────
+    function downloadSettings() {
+      const config = generateSettings();
+      const json = JSON.stringify(config, null, 2) + '\n';
+      const name = document.getElementById('settingName').value.trim() || 'settings';
+      const filename = name + '.porterman.json';
+
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function copyToClipboard() {
+      const config = generateSettings();
+      const json = JSON.stringify(config, null, 2);
+      navigator.clipboard.writeText(json).then(() => {
+        const btn = document.getElementById('copy-btn');
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'Copy';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+
+    function resetAll() {
+      state.tunnels = [];
+      nextId = 1;
+      document.getElementById('settingName').value = 'settings';
+      document.getElementById('settingNameHint').textContent = 'settings';
+      document.getElementById('cleanup').checked = true;
+      document.getElementById('verbose').checked = false;
+      addTunnel();
+    }
+
+    // ─── Import ──────────────────────────────────────────────────
+    function importSettings(json) {
+      try {
+        const config = JSON.parse(json);
+        if (!config.tunnels || typeof config.tunnels !== 'object') {
+          alert('Invalid settings file: missing "tunnels" object.');
+          return;
+        }
+
+        state.tunnels = [];
+        nextId = 1;
+
+        // Set globals
+        if (config.cleanup === false) {
+          document.getElementById('cleanup').checked = false;
+        } else {
+          document.getElementById('cleanup').checked = true;
+        }
+        if (config.verbose === true) {
+          document.getElementById('verbose').checked = true;
+        } else {
+          document.getElementById('verbose').checked = false;
+        }
+
+        for (const [port, tunnelConfig] of Object.entries(config.tunnels)) {
+          const files = [];
+          if (tunnelConfig.envFiles && Array.isArray(tunnelConfig.envFiles)) {
+            for (const ft of tunnelConfig.envFiles) {
+              const variables = [];
+              if (ft.variables && typeof ft.variables === 'object') {
+                for (const [key, value] of Object.entries(ft.variables)) {
+                  variables.push(createVariable(key, String(value)));
+                }
+              }
+              if (variables.length === 0) variables.push(createVariable());
+              files.push(createFileTarget(
+                ft.file || '.env',
+                ft.filePath || '',
+                ft.type || 'auto',
+                variables
+              ));
+            }
+          }
+          if (files.length === 0) files.push(createFileTarget());
+          addTunnel(port, files);
+        }
+
+        if (state.tunnels.length === 0) addTunnel();
+        render();
+      } catch (e) {
+        alert('Failed to parse JSON: ' + e.message);
+      }
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────────
+    function escapeAttr(str) {
+      return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // ─── Event Bindings ──────────────────────────────────────────
+    function bindGlobalEvents() {
+      // Setting name hint
+      document.getElementById('settingName').addEventListener('input', function() {
+        document.getElementById('settingNameHint').textContent = this.value.trim() || 'settings';
+        renderPreview();
+      });
+
+      // Toggles
+      document.getElementById('cleanup').addEventListener('change', renderPreview);
+      document.getElementById('verbose').addEventListener('change', renderPreview);
+
+      // Import file input
+      document.getElementById('import-file').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (ev) => importSettings(ev.target.result);
+          reader.readAsText(file);
+        }
+      });
+
+      // Drag & drop
+      const dropzone = document.getElementById('import-dropzone');
+      dropzone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        this.classList.add('dragover');
+      });
+      dropzone.addEventListener('dragleave', function() {
+        this.classList.remove('dragover');
+      });
+      dropzone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.classList.remove('dragover');
+        const file = e.dataTransfer.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (ev) => importSettings(ev.target.result);
+          reader.readAsText(file);
+        }
+      });
+    }
+
+    // ─── Boot ────────────────────────────────────────────────────
+    init();
+  </script>
+</body>
+</html>
