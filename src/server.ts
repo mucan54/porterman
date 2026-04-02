@@ -1,4 +1,4 @@
-import { startTunnel, startTunnels, type TunnelInstance } from "./tunnel.js";
+import { startTunnel, startTunnels, ensureCloudflared, type TunnelInstance } from "./tunnel.js";
 import { writePidFile, paths } from "./config.js";
 import { writeEnvFile, cleanEnvFile } from "./env.js";
 import { logger, setVerbose } from "./logger.js";
@@ -52,6 +52,9 @@ export async function startServer(options: ServerOptions): Promise<PortermanServ
   });
 
   const uniquePorts = uniqueMappings.map((m) => m.port);
+
+  // Ensure cloudflared binary is available and up to date
+  await ensureCloudflared();
 
   logger.info(`Starting ${uniquePorts.length} tunnel${uniquePorts.length > 1 ? "s" : ""}...`);
 

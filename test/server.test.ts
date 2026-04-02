@@ -14,6 +14,7 @@ vi.mock("../src/tunnel.js", () => ({
       stop: vi.fn(),
     }))
   ),
+  ensureCloudflared: vi.fn(async () => {}),
 }));
 
 // Mock config module
