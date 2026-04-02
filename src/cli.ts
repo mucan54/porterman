@@ -6,7 +6,7 @@ import { startServer, type PortMapping } from "./server.js";
 import { parsePortArg, formatExports } from "./env.js";
 import { readPidFile, pidFileExists, writePidFile, paths } from "./config.js";
 import { logger, setVerbose } from "./logger.js";
-import { startTunnels } from "./tunnel.js";
+import { startTunnels, ensureCloudflared } from "./tunnel.js";
 import {
   loadSettings,
   createBackup,
@@ -105,6 +105,14 @@ cli
       // Create backup before modifying anything
       const manifest = createBackup(config);
       writeBackupFile(settingsName, manifest);
+
+      // Ensure cloudflared binary is available and up to date
+      try {
+        await ensureCloudflared();
+      } catch (err) {
+        logger.error(err instanceof Error ? err.message : String(err));
+        process.exit(1);
+      }
 
       logger.info(
         `Starting ${ports.length} tunnel${ports.length > 1 ? "s" : ""}...`

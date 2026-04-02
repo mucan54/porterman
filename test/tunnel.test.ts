@@ -23,7 +23,65 @@ vi.mock("cloudflared", () => {
 
   return {
     Tunnel: MockTunnel,
+    bin: "/tmp/mock-cloudflared-bin",
+    install: vi.fn(),
   };
+});
+
+describe("parseCloudflaredVersion", () => {
+  it("parses standard version output", async () => {
+    const { parseCloudflaredVersion } = await import("../src/tunnel.js");
+    const result = parseCloudflaredVersion(
+      "cloudflared version 2025.2.0 (built 2025-02-10-1200 linux/amd64)"
+    );
+    expect(result).not.toBeNull();
+    expect(result!.version).toBe("2025.2.0");
+    expect(result!.date.getFullYear()).toBe(2025);
+    expect(result!.date.getMonth()).toBe(1); // February = 1
+  });
+
+  it("parses bare version string", async () => {
+    const { parseCloudflaredVersion } = await import("../src/tunnel.js");
+    const result = parseCloudflaredVersion("2026.3.0");
+    expect(result).not.toBeNull();
+    expect(result!.version).toBe("2026.3.0");
+    expect(result!.date.getFullYear()).toBe(2026);
+    expect(result!.date.getMonth()).toBe(2); // March = 2
+  });
+
+  it("parses single-digit month", async () => {
+    const { parseCloudflaredVersion } = await import("../src/tunnel.js");
+    const result = parseCloudflaredVersion("2024.1.0");
+    expect(result).not.toBeNull();
+    expect(result!.version).toBe("2024.1.0");
+    expect(result!.date.getMonth()).toBe(0); // January = 0
+  });
+
+  it("parses double-digit month", async () => {
+    const { parseCloudflaredVersion } = await import("../src/tunnel.js");
+    const result = parseCloudflaredVersion("2024.12.0");
+    expect(result).not.toBeNull();
+    expect(result!.version).toBe("2024.12.0");
+    expect(result!.date.getMonth()).toBe(11); // December = 11
+  });
+
+  it("returns null for invalid input", async () => {
+    const { parseCloudflaredVersion } = await import("../src/tunnel.js");
+    expect(parseCloudflaredVersion("not a version")).toBeNull();
+    expect(parseCloudflaredVersion("")).toBeNull();
+    expect(parseCloudflaredVersion("abc.def.ghi")).toBeNull();
+  });
+
+  it("returns null for out-of-range year", async () => {
+    const { parseCloudflaredVersion } = await import("../src/tunnel.js");
+    expect(parseCloudflaredVersion("1999.1.0")).toBeNull();
+  });
+
+  it("returns null for out-of-range month", async () => {
+    const { parseCloudflaredVersion } = await import("../src/tunnel.js");
+    expect(parseCloudflaredVersion("2025.13.0")).toBeNull();
+    expect(parseCloudflaredVersion("2025.0.0")).toBeNull();
+  });
 });
 
 describe("startTunnel", () => {
