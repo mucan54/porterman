@@ -73,7 +73,7 @@ The file is automatically cleaned up when Porterman stops.
 ### Custom env file path
 
 ```bash
-porterman expose 3000:APP_URL --env-file .env.tunnels
+porterman expose 3000:APP_URL --env-output .env.tunnels
 ```
 
 ### Shell eval mode
@@ -183,7 +183,7 @@ Ports can be plain numbers or port:ENV_VAR pairs:
 
 Options:
   -v, --verbose          Log all tunnel activity
-  --env-file <path>      Path to write env file (default: .env.porterman)
+  --env-output <path>    Path to write env file (default: .env.porterman)
   --eval                 Output export statements for shell eval
 ```
 
