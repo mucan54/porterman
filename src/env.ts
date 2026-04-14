@@ -1,6 +1,6 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
 import { logger } from "./logger.js";
 
 const DEFAULT_ENV_FILE = ".env.porterman";
@@ -69,6 +69,9 @@ export async function writeEnvFile(
 ): Promise<string> {
   const target = resolve(filePath ?? DEFAULT_ENV_FILE);
   const block = buildManagedBlock(mappings);
+
+  // Ensure parent directory exists for custom paths like ./config/.env
+  await mkdir(dirname(target), { recursive: true });
 
   if (existsSync(target)) {
     const existing = await readFile(target, "utf-8");
