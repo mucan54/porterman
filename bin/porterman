@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# The double-dash (--) prevents Node.js from intercepting CLI flags like
+# --env-file which Node 21.7+ treats as its own built-in flag, even when
+# it appears after the script path.
+exec node -- "$(dirname "$0")/../dist/cli.js" "$@"

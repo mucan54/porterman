@@ -38,7 +38,8 @@ const cli = cac("porterman");
 cli
   .command("expose [...ports]", "Expose local ports via Cloudflare Tunnel")
   .option("-v, --verbose", "Log all tunnel activity")
-  .option("--env-file <path>", "Path to write env file (default: .env.porterman)")
+  .option("--env-output <path>", "Path to write env file (default: .env.porterman)")
+  .option("--env-file <path>", "Alias for --env-output (deprecated due to Node.js flag conflict)")
   .option("--eval", "Output export statements for shell eval")
   .option("--cleanup", "Delete backup file on shutdown (default: true)")
   .option("--no-cleanup", "Keep backup file on shutdown")
@@ -282,7 +283,7 @@ cli
       server = await startServer({
         ports: portMappings,
         verbose: options.verbose,
-        envFile: options.envFile,
+        envFile: options.envOutput ?? options.envFile,
       });
     } catch (err) {
       logger.error(err instanceof Error ? err.message : String(err));
@@ -311,7 +312,8 @@ cli
 
       if (server.envVars.size > 0) {
         logger.blank();
-        logger.info("Env variables written to .env.porterman");
+        const envTarget = options.envOutput ?? options.envFile ?? ".env.porterman";
+        logger.info(`Env variables written to ${envTarget}`);
       }
 
       logger.blank();
